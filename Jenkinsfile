@@ -244,41 +244,37 @@ pipeline {
                     echo "⏳ Waiting for backend container to bootstrap and respond to health probes..."
 
                     for i in $(seq 1 $MAX_ATTEMPTS); do
-                        echo "🔎 Attempt ${i}/${MAX_ATTEMPTS}: Probing ${LOCAL_HEALTH_URL}..."
+                        echo "🔎 Attempt ${i}/${MAX_ATTEMPTS}: Probing backend health..."
 
-                        # Try local health check first
-                        HTTP_RESPONSE=$(curl -s -m 5 -w "\\n%{http_code}" "${LOCAL_HEALTH_URL}" 2>/dev/null || true)
-                        BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
-                        STATUS_CODE=$(echo "$HTTP_RESPONSE" | tail -n 1)
+                        # 1. Probe directly inside backend container (bypasses host port 8080 Jenkins collision)
+                        CONTAINER_RESP=$(docker exec bideo_api curl -s -m 5 -w "\\n%{http_code}" http://localhost:8080/api/health 2>/dev/null || true)
+                        C_BODY=$(echo "$CONTAINER_RESP" | sed '$d')
+                        C_CODE=$(echo "$CONTAINER_RESP" | tail -n 1)
 
-                        if [ "$STATUS_CODE" = "200" ] || [ "$STATUS_CODE" = "207" ] || [ "$STATUS_CODE" = "503" ]; then
-                            echo "📥 Received HTTP ${STATUS_CODE} from ${LOCAL_HEALTH_URL}!"
+                        if [ "$C_CODE" = "200" ] && echo "$C_BODY" | grep -q '"status"'; then
+                            echo "📥 Received HTTP ${C_CODE} from internal container probe!"
                             echo "📊 Health Response Payload:"
-                            echo "$BODY"
-
-                            if echo "$BODY" | grep -q '"status"'; then
-                                echo "✅ Backend service and health controller verified successfully!"
-                                HEALTH_VERIFIED=1
-                                break
-                            fi
+                            echo "$C_BODY"
+                            echo "✅ Internal backend health verified successfully!"
+                            HEALTH_VERIFIED=1
+                            break
                         fi
 
-                        # Try public endpoint fallback if running outside internal bridge
-                        if [ -n "${PUBLIC_HEALTH_URL}" ]; then
-                            PUB_RESPONSE=$(curl -s -m 5 -w "\\n%{http_code}" "${PUBLIC_HEALTH_URL}" 2>/dev/null || true)
-                            PUB_BODY=$(echo "$PUB_RESPONSE" | sed '$d')
-                            PUB_CODE=$(echo "$PUB_RESPONSE" | tail -n 1)
-                            if [ "$PUB_CODE" = "200" ] && echo "$PUB_BODY" | grep -q '"status"'; then
-                                echo "📥 Received HTTP ${PUB_CODE} from ${PUBLIC_HEALTH_URL}!"
-                                echo "📊 Health Response Payload:"
-                                echo "$PUB_BODY"
-                                echo "✅ Public health endpoint verified successfully!"
-                                HEALTH_VERIFIED=1
-                                break
-                            fi
+                        # 2. Probe public endpoint through reverse proxy
+                        PUB_RESPONSE=$(curl -s -m 5 -w "\\n%{http_code}" "${PUBLIC_HEALTH_URL}" 2>/dev/null || true)
+                        PUB_BODY=$(echo "$PUB_RESPONSE" | sed '$d')
+                        PUB_CODE=$(echo "$PUB_RESPONSE" | tail -n 1)
+
+                        if [ "$PUB_CODE" = "200" ] && echo "$PUB_BODY" | grep -q '"status"'; then
+                            echo "📥 Received HTTP ${PUB_CODE} from ${PUBLIC_HEALTH_URL}!"
+                            echo "📊 Health Response Payload:"
+                            echo "$PUB_BODY"
+                            echo "✅ Public health endpoint verified successfully!"
+                            HEALTH_VERIFIED=1
+                            break
                         fi
 
-                        echo "⏳ Service not ready yet (HTTP ${STATUS_CODE:-timeout}). Retrying in ${SLEEP_SECONDS}s..."
+                        echo "⏳ Backend bootstrap in progress (Internal HTTP: ${C_CODE:-down}, Public HTTP: ${PUB_CODE:-down}). Retrying in ${SLEEP_SECONDS}s..."
                         sleep $SLEEP_SECONDS
                     done
 

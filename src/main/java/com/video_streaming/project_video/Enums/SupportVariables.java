@@ -4,12 +4,15 @@ import java.util.List;
 
 public interface SupportVariables {
     List<String> WHITELISTED_PATHS = List.of(
+            "/api/health",
             "/api/app/**",
+            "/api/user/getUser/**",
             "/api/vid/view/**",
             "/api/vid/slug/**",
             "/api/vid/search",
             "/api/vid/all",
-            "/api/vid/user/**"
+            "/api/vid/user/**",
+            "/api/vid/*/view"
             );
 
     List<String> ALLOWED_ORIGINS = List.of(
