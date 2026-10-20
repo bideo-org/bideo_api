@@ -211,37 +211,56 @@ public class SystemHealthServiceImpl implements SystemHealthService {
         }
     }
 
+    private volatile ServiceStatusDTO cachedS3Status;
+    private volatile long lastS3CheckTime = 0;
+    private static final long S3_CACHE_DURATION_MS = 15_000;
+
     private ServiceStatusDTO checkS3() {
         if (amazonS3 == null) {
             return ServiceStatusDTO.builder().status("DOWN").message("AmazonS3 client not configured").build();
         }
+        long now = System.currentTimeMillis();
+        ServiceStatusDTO cached = this.cachedS3Status;
+        if (cached != null && (now - lastS3CheckTime < S3_CACHE_DURATION_MS)) {
+            return cached;
+        }
+
         long start = System.currentTimeMillis();
         try {
             if (s3BucketName != null && !s3BucketName.isBlank()) {
                 boolean exists = amazonS3.doesBucketExistV2(s3BucketName);
                 long latency = System.currentTimeMillis() - start;
-                return ServiceStatusDTO.builder()
+                ServiceStatusDTO result = ServiceStatusDTO.builder()
                         .status(exists ? "UP" : "DOWN")
                         .latencyMs(latency)
                         .message(exists ? "S3 bucket '" + s3BucketName + "' verified" : "Bucket does not exist")
                         .build();
+                this.cachedS3Status = result;
+                this.lastS3CheckTime = now;
+                return result;
             } else {
                 amazonS3.getS3AccountOwner();
                 long latency = System.currentTimeMillis() - start;
-                return ServiceStatusDTO.builder()
+                ServiceStatusDTO result = ServiceStatusDTO.builder()
                         .status("UP")
                         .latencyMs(latency)
                         .message("AWS S3 client authenticated")
                         .build();
+                this.cachedS3Status = result;
+                this.lastS3CheckTime = now;
+                return result;
             }
         } catch (Exception e) {
             long latency = System.currentTimeMillis() - start;
             logger.warn("AWS S3 health check failed: {}", e.getMessage());
-            return ServiceStatusDTO.builder()
+            ServiceStatusDTO result = ServiceStatusDTO.builder()
                     .status("DOWN")
                     .latencyMs(latency)
                     .message("S3 check failed: " + e.getMessage())
                     .build();
+            this.cachedS3Status = result;
+            this.lastS3CheckTime = now;
+            return result;
         }
     }
 }
