@@ -19,12 +19,29 @@ class AuthControllerTest {
     private AuthController authController;
     private StubFirebaseAuthService firebaseAuthService;
     private StubUserService userService;
+    private com.video_streaming.project_video.Service.SystemHealthService healthService;
 
     @BeforeEach
     void setUp() {
         firebaseAuthService = new StubFirebaseAuthService();
         userService = new StubUserService();
-        authController = new AuthController(firebaseAuthService, userService);
+        healthService = () -> com.video_streaming.project_video.DTOs.SystemHealthDTO.builder()
+                .status("UP")
+                .timestamp("2026-10-20T12:00:00Z")
+                .uptimeSeconds(100)
+                .version("0.0.1")
+                .services(java.util.Map.of())
+                .build();
+        authController = new AuthController(firebaseAuthService, userService, healthService);
+    }
+
+    @Test
+    @DisplayName("Should return structured SystemHealthDTO from healthCheck endpoint")
+    void testHealthCheck() {
+        ResponseEntity<com.video_streaming.project_video.DTOs.SystemHealthDTO> response = authController.healthCheck();
+        assertNotNull(response);
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("UP", response.getBody().getStatus());
     }
 
     @Test

@@ -1,6 +1,6 @@
 package com.video_streaming.project_video.Scheduler;
 
-import com.video_streaming.project_video.Service.VideoService;
+import com.video_streaming.project_video.Service.ViewTrackingService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,13 +12,13 @@ import org.springframework.stereotype.Component;
 public class ViewSyncScheduler {
 
     private static final Logger logger = LoggerFactory.getLogger(ViewSyncScheduler.class);
-    private final VideoService videoService;
+    private final ViewTrackingService viewTrackingService;
 
     // Run every 60 seconds to flush accumulated Redis view counts into PostgreSQL
-    @Scheduled(fixedRate = 60000)
+    @Scheduled(fixedRateString = "${views.sync.rate.ms:60000}")
     public void syncViews() {
         try {
-            videoService.syncPendingViewsToDatabase();
+            viewTrackingService.flushPendingViewsToDatabase();
         } catch (Exception e) {
             logger.error("Error occurred while syncing pending views to database: {}", e.getMessage());
         }

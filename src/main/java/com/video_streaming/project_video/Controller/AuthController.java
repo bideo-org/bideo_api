@@ -20,6 +20,9 @@ import lombok.RequiredArgsConstructor;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.video_streaming.project_video.DTOs.SystemHealthDTO;
+import com.video_streaming.project_video.Service.SystemHealthService;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/app")
@@ -28,10 +31,11 @@ public class AuthController {
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
     private final FirebaseAuthService firebaseAuthService;
     private final UserService userService;
+    private final SystemHealthService healthService;
 
     @GetMapping("/health")
-    public ResponseEntity<String> healthCheck() {
-        return ResponseEntity.ok("Service is running!");
+    public ResponseEntity<SystemHealthDTO> healthCheck() {
+        return ResponseEntity.ok(healthService.getSystemHealth());
     }
 
     @PostMapping("/createUser")

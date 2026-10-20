@@ -56,6 +56,7 @@ public class VideoServiceImpl implements VideoService {
     private final VideoRepository videoRepository;
     private final RedisTemplate<String, VideoDTO> videoRedisTemplate;
     private final RedisTemplate<String, Long> viewsRedisTemplate;
+    private final com.video_streaming.project_video.Service.ViewTrackingService viewTrackingService;
 
     private static final Duration VIDEO_CACHE_TTL = Duration.ofMinutes(cacheTTLMinutesVideo);
     private static final Duration VIEWS_CACHE_TTL = Duration.ofMinutes(cacheTTLMinutesViews);
@@ -212,14 +213,10 @@ public class VideoServiceImpl implements VideoService {
     @Override
     public VideoDTO viewVideo(Long videoID) {
         String videoKey = "video:id:" + videoID;
-        String pendingViewsKey = "video:pendingViews:" + videoID;
-
-        // Atomically increment pending views in Redis
-        viewsRedisTemplate.opsForValue().increment(pendingViewsKey);
-        viewsRedisTemplate.expire(pendingViewsKey, VIEWS_CACHE_TTL);
 
         VideoDTO cached = videoRedisTemplate.opsForValue().get(videoKey);
         if (cached != null) {
+            cached.setVideo_views(viewTrackingService.getEffectiveViews(cached.getVideoId(), cached.getVideo_views()));
             return cached;
         }
 
@@ -234,6 +231,7 @@ public class VideoServiceImpl implements VideoService {
         if (video.getSlug() != null) {
             videoRedisTemplate.opsForValue().set("video:slug:" + video.getSlug(), videoDTO, VIDEO_CACHE_TTL);
         }
+        videoDTO.setVideo_views(viewTrackingService.getEffectiveViews(videoDTO.getVideoId(), videoDTO.getVideo_views()));
         return videoDTO;
     }
 
@@ -243,26 +241,19 @@ public class VideoServiceImpl implements VideoService {
 
         VideoDTO cached = videoRedisTemplate.opsForValue().get(slugKey);
         if (cached != null) {
-            if (cached.getVideoId() != null) {
-                String pendingViewsKey = "video:pendingViews:" + cached.getVideoId();
-                viewsRedisTemplate.opsForValue().increment(pendingViewsKey);
-                viewsRedisTemplate.expire(pendingViewsKey, VIEWS_CACHE_TTL);
-            }
+            cached.setVideo_views(viewTrackingService.getEffectiveViews(cached.getVideoId(), cached.getVideo_views()));
             return cached;
         }
 
         Video video = videoRepository.findBySlug(slug)
                 .orElseThrow(() -> new RuntimeException("Video not found with slug: " + slug));
 
-        String pendingViewsKey = "video:pendingViews:" + video.getVideoId();
-        viewsRedisTemplate.opsForValue().increment(pendingViewsKey);
-        viewsRedisTemplate.expire(pendingViewsKey, VIEWS_CACHE_TTL);
-
         VideoDTOMapper videoDTOMapper = new VideoDTOMapper();
         VideoDTO videoDTO = videoDTOMapper.convertEntityToDTO(video);
 
         videoRedisTemplate.opsForValue().set(slugKey, videoDTO, VIDEO_CACHE_TTL);
         videoRedisTemplate.opsForValue().set("video:id:" + video.getVideoId(), videoDTO, VIDEO_CACHE_TTL);
+        videoDTO.setVideo_views(viewTrackingService.getEffectiveViews(videoDTO.getVideoId(), videoDTO.getVideo_views()));
         return videoDTO;
     }
 
@@ -391,34 +382,7 @@ public class VideoServiceImpl implements VideoService {
     @Override
     @Transactional
     public void syncPendingViewsToDatabase() {
-        Set<String> keys = viewsRedisTemplate.keys("video:pendingViews:*");
-        if (keys == null || keys.isEmpty()) {
-            return;
-        }
-
-        for (String key : keys) {
-            try {
-                String videoIdStr = key.replace("video:pendingViews:", "");
-                Long videoId = Long.parseLong(videoIdStr);
-                Long pendingViews = viewsRedisTemplate.opsForValue().get(key);
-
-                if (pendingViews != null && pendingViews > 0) {
-                    viewsRedisTemplate.delete(key);
-                    videoRepository.incrementViews(videoId, pendingViews);
-                    logger.debug("Flushed {} pending views for video ID: {}", pendingViews, videoId);
-
-                    // Update cached DTO if currently present in cache
-                    String cacheKey = "video:id:" + videoId;
-                    VideoDTO cached = videoRedisTemplate.opsForValue().get(cacheKey);
-                    if (cached != null) {
-                        cached.setVideo_views((cached.getVideo_views() != null ? cached.getVideo_views() : 0L) + pendingViews);
-                        videoRedisTemplate.opsForValue().set(cacheKey, cached, VIDEO_CACHE_TTL);
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("Failed to sync views for key {}: {}", key, e.getMessage());
-            }
-        }
+        viewTrackingService.flushPendingViewsToDatabase();
     }
 
     private void invalidateVideoCache(Video video) {

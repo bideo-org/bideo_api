@@ -22,9 +22,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.apache.tika.Tika;
 
+import com.video_streaming.project_video.Service.ViewTrackingService;
+import jakarta.servlet.http.HttpServletRequest;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 @RestController
@@ -35,6 +39,7 @@ public class VideoController {
     private static final Logger logger = LoggerFactory.getLogger(VideoController.class);
     private final VideoService videoService;
     private final SenderProcessService messageSender;
+    private final ViewTrackingService viewTrackingService;
 
     @PostMapping("/upload")
     public ResponseEntity<String> uploadVidResponseEntity(
@@ -101,6 +106,33 @@ public class VideoController {
     public ResponseEntity<VideoDTO> getVideoBySlug(@PathVariable String slug) {
         VideoDTO videoDTO = videoService.viewVideoBySlug(slug);
         return ResponseEntity.ok(videoDTO);
+    }
+
+    @PostMapping("/{videoId}/view")
+    public ResponseEntity<Map<String, Object>> recordPlaybackView(
+            @PathVariable Long videoId,
+            @RequestParam(required = false) String userId,
+            HttpServletRequest request) {
+        String clientIp = extractClientIp(request);
+        String userAgent = request != null ? request.getHeader("User-Agent") : null;
+        boolean recorded = viewTrackingService.recordView(videoId, clientIp, userAgent, userId);
+        return ResponseEntity.ok(Map.of(
+                "recorded", recorded,
+                "videoId", videoId
+        ));
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        if (request == null) return "unknown";
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip != null && !ip.isBlank() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip.split(",")[0].trim();
+        }
+        ip = request.getHeader("X-Real-IP");
+        if (ip != null && !ip.isBlank() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip.trim();
+        }
+        return request.getRemoteAddr();
     }
 
     @PutMapping("/{videoId}")

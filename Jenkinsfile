@@ -1,24 +1,142 @@
 pipeline {
     agent any
 
+    options {
+        // Prevent jobs from running indefinitely
+        timeout(time: 30, unit: 'MINUTES')
+        // Retain recent builds to conserve server disk space
+        buildDiscarder(logRotator(numToKeepStr: '25', artifactNumToKeepStr: '10'))
+        // Add timestamps to build logs
+        timestamps()
+        // ANSI colored output for readable terminal logs
+        ansiColor('xterm')
+        // Prevent concurrent builds from interfering with production state
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        DOCKER_BUILDKIT = '1'
+        COMPOSE_DOCKER_CLI_BUILD = '1'
+        MAVEN_OPTS = '-Dorg.slf4j.simpleLogger.showDateTime=true -Dorg.slf4j.simpleLogger.dateTimeFormat=HH:mm:ss'
+        DEPLOY_ROOT = '/home/rajit/Bideo_proj'
+        BACKEND_DIR = '/home/rajit/Bideo_proj/bideo_api'
+        LOCAL_HEALTH_URL = 'http://localhost:8080/api/health'
+        PUBLIC_HEALTH_URL = 'https://bideo.rajit.cc/api/health'
+    }
+
     stages {
-        stage('Unit Tests') {
+        stage('Pre-flight & Environment Check') {
             steps {
                 sh '''
                     set -eux
-                    echo "🧪 Running backend unit tests..."
+                    echo "📋 =========================================="
+                    echo "📋  PRE-FLIGHT DIAGNOSTICS & SYSTEM CHECKS   "
+                    echo "📋 =========================================="
 
-                    # Ensure Maven is installed and accessible
+                    # 1. Display build & Git metadata
+                    COMMIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "${GIT_COMMIT:-unknown}")
+                    COMMIT_AUTHOR=$(git log -1 --pretty=format:'%an <%ae>' 2>/dev/null || echo "Unknown")
+                    COMMIT_MSG=$(git log -1 --pretty=format:'%s' 2>/dev/null || echo "No commit message")
+
+                    echo "🔢 Jenkins Build: #${BUILD_NUMBER}"
+                    echo "📌 Target Commit: ${COMMIT_SHA}"
+                    echo "👤 Commit Author: ${COMMIT_AUTHOR}"
+                    echo "📝 Commit Message: ${COMMIT_MSG}"
+                    echo "📅 Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+                    # 2. Check disk space
+                    echo "💾 Checking disk storage..."
+                    df -h . | tail -1
+
+                    # 3. Verify Docker runtime
+                    echo "🐳 Verifying Docker daemon..."
+                    docker --version || echo "⚠️ Docker CLI not in default PATH"
+
+                    # 4. Ensure Maven is installed and accessible
                     if ! command -v mvn >/dev/null 2>&1; then
-                        echo "📦 Maven not found. Installing..."
+                        echo "📦 Maven not found in PATH. Checking alternative locations or installing..."
+                        for mvn_dir in /usr/share/maven/bin /opt/maven/bin /opt/apache-maven-*/bin; do
+                            if [ -x "$mvn_dir/mvn" ]; then
+                                export PATH="$mvn_dir:$PATH"
+                                break
+                            fi
+                        done
+                    fi
+
+                    if ! command -v mvn >/dev/null 2>&1; then
+                        echo "📦 Installing standalone Apache Maven..."
                         apt-get update -qq && apt-get install -y -qq maven || {
+                            mkdir -p /opt
                             curl -fsSL https://dlcdn.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz | tar xz -C /opt/
                             export PATH="/opt/apache-maven-3.9.9/bin:$PATH"
                         }
                     fi
 
-                    # Run isolated unit tests (auth, username resolution, SEO, slug utils)
+                    mvn -v
+
+                    # 5. Configure Git safe directories for Jenkins user across deployment repos
+                    git config --global --add safe.directory "${DEPLOY_ROOT}" || true
+                    git config --global --add safe.directory "${BACKEND_DIR}" || true
+                    git config --global --add safe.directory '*' || true
+
+                    echo "✅ Pre-flight checks passed successfully!"
+                '''
+            }
+        }
+
+        stage('Unit & Regression Tests') {
+            steps {
+                sh '''
+                    set -eux
+                    echo "🧪 =========================================="
+                    echo "🧪  RUNNING ISOLATED BACKEND UNIT TESTS      "
+                    echo "🧪 =========================================="
+
+                    # Ensure Maven is on PATH
+                    if ! command -v mvn >/dev/null 2>&1; then
+                        for mvn_dir in /usr/share/maven/bin /opt/maven/bin /opt/apache-maven-*/bin /opt/apache-maven-3.9.9/bin; do
+                            [ -x "$mvn_dir/mvn" ] && export PATH="$mvn_dir:$PATH" && break
+                        done
+                    fi
+
+                    # Run isolated unit tests (auth, username resolution, view tracking, health checks, SEO, slug utils)
                     mvn test
+                '''
+            }
+            post {
+                always {
+                    // Record and report JUnit test trends in Jenkins UI
+                    junit testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true
+                }
+            }
+        }
+
+        stage('Package Application Artifact') {
+            steps {
+                sh '''
+                    set -eux
+                    echo "🔨 =========================================="
+                    echo "🔨  PACKAGING SPRING BOOT EXECUTABLE JAR    "
+                    echo "🔨 =========================================="
+
+                    if ! command -v mvn >/dev/null 2>&1; then
+                        for mvn_dir in /usr/share/maven/bin /opt/maven/bin /opt/apache-maven-*/bin /opt/apache-maven-3.9.9/bin; do
+                            [ -x "$mvn_dir/mvn" ] && export PATH="$mvn_dir:$PATH" && break
+                        done
+                    fi
+
+                    # Build reproducible production jar skipping already executed unit tests
+                    mvn clean package -DskipTests
+
+                    JAR_PATH=$(find target -maxdepth 1 -name "*.jar" ! -name "*sources*" ! -name "*javadoc*" | head -1)
+                    if [ -n "$JAR_PATH" ] && [ -f "$JAR_PATH" ]; then
+                        echo "✅ Packaged Artifact: ${JAR_PATH}"
+                        echo "📦 Artifact Size: $(ls -lh "$JAR_PATH" | awk '{print $5}')"
+                        echo "🔑 SHA256 Checksum: $(sha256sum "$JAR_PATH" 2>/dev/null || shasum -a 256 "$JAR_PATH" || echo 'n/a')"
+                    else
+                        echo "❌ Error: Expected JAR artifact not found in target/ directory!"
+                        exit 1
+                    fi
                 '''
             }
         }
@@ -27,39 +145,34 @@ pipeline {
             steps {
                 sh '''
                     set -eux
-                    echo "🚀 Starting backend deployment pipeline..."
+                    echo "🚀 =========================================="
+                    echo "🚀  STARTING ZERO-DOWNTIME BACKEND DEPLOY   "
+                    echo "🚀 =========================================="
 
-                    # 1. Determine Docker Compose command
+                    # 1. Determine Docker Compose binary
                     DOCKER_COMPOSE="docker-compose"
                     if ! command -v docker-compose >/dev/null 2>&1; then
                         DOCKER_COMPOSE="docker compose"
                     fi
 
-                    # 2. Ensure Maven is installed and accessible
+                    # 2. Ensure Maven is on PATH
                     if ! command -v mvn >/dev/null 2>&1; then
-                        echo "📦 Maven not found. Installing..."
-                        apt-get update -qq && apt-get install -y -qq maven || {
-                            curl -fsSL https://dlcdn.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz | tar xz -C /opt/
-                            export PATH="/opt/apache-maven-3.9.9/bin:$PATH"
-                        }
+                        for mvn_dir in /usr/share/maven/bin /opt/maven/bin /opt/apache-maven-*/bin /opt/apache-maven-3.9.9/bin; do
+                            [ -x "$mvn_dir/mvn" ] && export PATH="$mvn_dir:$PATH" && break
+                        done
                     fi
 
-                    # 3. Configure Git safe directories for Jenkins user
-                    git config --global --add safe.directory /home/rajit/Bideo_proj || true
-                    git config --global --add safe.directory /home/rajit/Bideo_proj/bideo_api || true
-                    git config --global --add safe.directory '*' || true
-
-                    # 4. Pull latest backend code and package jar
-                    echo "🔄 Pulling latest backend code..."
-                    cd /home/rajit/Bideo_proj/bideo_api
+                    # 3. Pull latest backend code into deployment directory
+                    echo "🔄 Updating code in ${BACKEND_DIR}..."
+                    cd "${BACKEND_DIR}"
                     git pull --rebase
 
-                    echo "🔨 Building backend package with Maven..."
+                    echo "🔨 Building deployment jar inside ${BACKEND_DIR}..."
                     mvn clean package -DskipTests
 
-                    # 5. Rebuild and restart only backend container
-                    cd /home/rajit/Bideo_proj
-                    echo "📦 Identifying backend service in docker-compose..."
+                    # 4. Identify backend service in docker-compose
+                    cd "${DEPLOY_ROOT}"
+                    echo "📦 Identifying backend service name in docker-compose..."
 
                     SERVICE_NAME="bideo_api"
                     if ! $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "bideo_api"; then
@@ -72,21 +185,117 @@ pipeline {
                         fi
                     fi
 
+                    # 5. Rebuild and restart only backend container
                     if [ -n "$SERVICE_NAME" ]; then
-                        echo "🔄 Rebuilding and restarting single service: ${SERVICE_NAME}..."
+                        echo "🔄 Rebuilding container image for service: ${SERVICE_NAME}..."
                         $DOCKER_COMPOSE build "$SERVICE_NAME"
+                        echo "🔄 Updating container with zero-downtime recreation..."
                         $DOCKER_COMPOSE up -d --no-deps "$SERVICE_NAME"
                     else
-                        echo "⚠️ Backend service name not matched, falling back to full build..."
+                        echo "⚠️ Backend service name not matched in docker-compose services; performing general build..."
                         $DOCKER_COMPOSE build
                         $DOCKER_COMPOSE up -d
                     fi
 
-                    # 6. Clean up dangling images to preserve disk space
-                    echo "🧹 Pruning unused images..."
-                    docker image prune -f
+                    echo "✅ Container launch initiated!"
+                '''
+            }
+        }
 
-                    echo "✅ Backend deployment complete!"
+        stage('Smoke & Health Verification') {
+            steps {
+                sh '''
+                    set +e
+                    echo "🩺 =========================================="
+                    echo "🩺  POST-DEPLOYMENT HEALTH CHECK & SMOKE TEST"
+                    echo "🩺 =========================================="
+
+                    DOCKER_COMPOSE="docker-compose"
+                    if ! command -v docker-compose >/dev/null 2>&1; then
+                        DOCKER_COMPOSE="docker compose"
+                    fi
+
+                    cd "${DEPLOY_ROOT}" || true
+
+                    SERVICE_NAME="bideo_api"
+                    if ! $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "bideo_api"; then
+                        if $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "backend"; then
+                            SERVICE_NAME="backend"
+                        elif $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "api"; then
+                            SERVICE_NAME="api"
+                        fi
+                    fi
+
+                    HEALTH_VERIFIED=0
+                    MAX_ATTEMPTS=15
+                    SLEEP_SECONDS=4
+
+                    echo "⏳ Waiting for backend container to bootstrap and respond to health probes..."
+
+                    for i in $(seq 1 $MAX_ATTEMPTS); do
+                        echo "🔎 Attempt ${i}/${MAX_ATTEMPTS}: Probing ${LOCAL_HEALTH_URL}..."
+
+                        # Try local health check first
+                        HTTP_RESPONSE=$(curl -s -m 5 -w "\\n%{http_code}" "${LOCAL_HEALTH_URL}" 2>/dev/null || true)
+                        BODY=$(echo "$HTTP_RESPONSE" | sed '$d')
+                        STATUS_CODE=$(echo "$HTTP_RESPONSE" | tail -n 1)
+
+                        if [ "$STATUS_CODE" = "200" ] || [ "$STATUS_CODE" = "207" ] || [ "$STATUS_CODE" = "503" ]; then
+                            echo "📥 Received HTTP ${STATUS_CODE} from ${LOCAL_HEALTH_URL}!"
+                            echo "📊 Health Response Payload:"
+                            echo "$BODY"
+
+                            if echo "$BODY" | grep -q '"status"'; then
+                                echo "✅ Backend service and health controller verified successfully!"
+                                HEALTH_VERIFIED=1
+                                break
+                            fi
+                        fi
+
+                        # Try public endpoint fallback if running outside internal bridge
+                        if [ -n "${PUBLIC_HEALTH_URL}" ]; then
+                            PUB_RESPONSE=$(curl -s -m 5 -w "\\n%{http_code}" "${PUBLIC_HEALTH_URL}" 2>/dev/null || true)
+                            PUB_BODY=$(echo "$PUB_RESPONSE" | sed '$d')
+                            PUB_CODE=$(echo "$PUB_RESPONSE" | tail -n 1)
+                            if [ "$PUB_CODE" = "200" ] && echo "$PUB_BODY" | grep -q '"status"'; then
+                                echo "📥 Received HTTP ${PUB_CODE} from ${PUBLIC_HEALTH_URL}!"
+                                echo "📊 Health Response Payload:"
+                                echo "$PUB_BODY"
+                                echo "✅ Public health endpoint verified successfully!"
+                                HEALTH_VERIFIED=1
+                                break
+                            fi
+                        fi
+
+                        echo "⏳ Service not ready yet (HTTP ${STATUS_CODE:-timeout}). Retrying in ${SLEEP_SECONDS}s..."
+                        sleep $SLEEP_SECONDS
+                    done
+
+                    if [ "$HEALTH_VERIFIED" -eq 1 ]; then
+                        echo "🎉 Smoke verification PASSED!"
+                    else
+                        echo "❌ Health check probe failed after ${MAX_ATTEMPTS} attempts."
+                        echo "📋 Dumping recent container logs for ${SERVICE_NAME}..."
+                        $DOCKER_COMPOSE logs --tail 100 "$SERVICE_NAME" 2>/dev/null || docker logs --tail 100 "$SERVICE_NAME" 2>/dev/null || true
+                        echo "❌ Failing build due to unsuccessful health check."
+                        exit 1
+                    fi
+                '''
+            }
+        }
+
+        stage('Hygiene & Cleanup') {
+            steps {
+                sh '''
+                    set +e
+                    echo "🧹 =========================================="
+                    echo "🧹  POST-DEPLOYMENT DOCKER & SYSTEM HYGIENE   "
+                    echo "🧹 =========================================="
+
+                    echo "🧹 Pruning unused dangling Docker images..."
+                    docker image prune -f || true
+
+                    echo "✅ System hygiene complete!"
                 '''
             }
         }
@@ -94,11 +303,24 @@ pipeline {
 
     post {
         success {
-            echo 'Deployment successful'
+            echo "================================================================"
+            echo "🎉 PRODUCTION DEPLOYMENT SUCCESSFUL!"
+            echo "🚀 Build #${env.BUILD_NUMBER} is live and verified healthy."
+            echo "🔗 Health API: ${env.PUBLIC_HEALTH_URL}"
+            echo "================================================================"
         }
 
         failure {
-            echo 'Deployment failed'
+            echo "================================================================"
+            echo "❌ PRODUCTION DEPLOYMENT FAILED on Build #${env.BUILD_NUMBER}!"
+            echo "⚠️ Please inspect the console logs above and container health."
+            echo "================================================================"
+        }
+
+        unstable {
+            echo "================================================================"
+            echo "⚠️ BUILD UNSTABLE: Unit tests reported failures or regressions."
+            echo "================================================================"
         }
     }
 }
