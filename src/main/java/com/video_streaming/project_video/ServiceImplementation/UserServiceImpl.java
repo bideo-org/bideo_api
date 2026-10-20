@@ -33,10 +33,18 @@ public class UserServiceImpl implements UserService {
 
     @Transactional
     public void create(String emailId, String password, String user_name, String avatar_url) throws Exception {
+        if (user_name == null || user_name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Username cannot be empty");
+        }
+        String cleanUsername = user_name.trim();
+        if (userRepository.existsByUserNameIgnoreCase(cleanUsername)) {
+            throw new IllegalArgumentException("Username '" + cleanUsername + "' is already taken");
+        }
+
         CreateRequest request = new CreateRequest();
         request.setEmail(emailId);
         request.setPassword(password);
-        request.setDisplayName(user_name);
+        request.setDisplayName(cleanUsername);
         request.setEmailVerified(Boolean.TRUE);
 
         try {
@@ -94,5 +102,25 @@ public class UserServiceImpl implements UserService {
         }
 
         return userDTOMapper.convertEntityToDTO(user);
+    }
+
+    public String resolveEmailFromIdentifier(String identifier) {
+        if (identifier == null || identifier.trim().isEmpty()) {
+            return identifier;
+        }
+        String trimmed = identifier.trim();
+        if (trimmed.contains("@")) {
+            return trimmed;
+        }
+        return userRepository.findFirstByUserNameIgnoreCase(trimmed)
+                .map(User::getUser_email)
+                .orElse(trimmed);
+    }
+
+    public boolean isUsernameAvailable(String username) {
+        if (username == null || username.trim().isEmpty()) {
+            return false;
+        }
+        return !userRepository.existsByUserNameIgnoreCase(username.trim());
     }
 }

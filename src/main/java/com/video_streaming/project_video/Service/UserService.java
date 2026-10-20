@@ -30,4 +30,20 @@ public interface UserService {
      * @return UserDTO containing user details.
      */
     UserDTO getUserById(String userId);
+
+    /**
+     * Resolves the user's email from their identifier (which may be a username or an email).
+     *
+     * @param identifier The username or email entered by the user.
+     * @return The resolved email address.
+     */
+    String resolveEmailFromIdentifier(String identifier);
+
+    /**
+     * Checks if a given username is available (not already taken).
+     *
+     * @param username The username to check.
+     * @return true if available, false if already taken.
+     */
+    boolean isUsernameAvailable(String username);
 }

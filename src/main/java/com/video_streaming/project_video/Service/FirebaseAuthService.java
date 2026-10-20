@@ -28,6 +28,16 @@ public interface FirebaseAuthService {
     FirebaseSignInResponse signInWithEmailAndPassword(String email, String password);
 
     /**
+     * Signs in a user with an identifier (either username or email) and password.
+     * Resolves the identifier to an email if a username is provided.
+     *
+     * @param identifier The user's username or email.
+     * @param password The user's password.
+     * @return A FirebaseSignInResponse object containing the sign-in result.
+     */
+    FirebaseSignInResponse signIn(String identifier, String password);
+
+    /**
      * Refreshes the Firebase ID Token using a refresh token.
      *
      * @param refreshToken The refresh token to use for refreshing the ID token.

@@ -68,21 +68,35 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<FirebaseSignInResponse> login(
-            @RequestParam String email,
-            @RequestParam String password,
+            @RequestParam(value = "email", required = false) String email,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "identifier", required = false) String identifier,
+            @RequestParam("password") String password,
             HttpServletResponse response
     ) {
-        FirebaseSignInResponse firebaseResponse = firebaseAuthService.signInWithEmailAndPassword(email, password);
+        String loginIdentifier = (identifier != null && !identifier.isBlank()) ? identifier
+                : ((username != null && !username.isBlank()) ? username : email);
+
+        if (loginIdentifier == null || loginIdentifier.isBlank()) {
+            throw new IllegalArgumentException("Email or username is required");
+        }
+
+        FirebaseSignInResponse firebaseResponse = firebaseAuthService.signIn(loginIdentifier, password);
 
         Cookie cookie = new Cookie("token", firebaseResponse.getIdToken());
         cookie.setHttpOnly(true);
         cookie.setPath("/");
         cookie.setMaxAge(60 * 60 * 24); // 1 day
-
-         cookie.setSecure(true);
+        cookie.setSecure(true);
         response.addCookie(cookie);
 
         return ResponseEntity.ok(firebaseResponse);
+    }
+
+    @GetMapping("/check-username")
+    public ResponseEntity<Map<String, Boolean>> checkUsername(@RequestParam String username) {
+        boolean available = userService.isUsernameAvailable(username);
+        return ResponseEntity.ok(Map.of("available", available));
     }
 
     @PostMapping("/refresh-token")

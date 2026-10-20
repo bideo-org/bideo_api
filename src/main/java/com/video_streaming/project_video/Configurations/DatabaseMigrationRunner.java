@@ -45,6 +45,13 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                     "CONSTRAINT fk_video_tags_video FOREIGN KEY (video_id) REFERENCES vid_metadata(video_id) ON DELETE CASCADE" +
                     ");");
 
+            // 4. Create case-insensitive unique index on user_name for fast username lookup
+            try {
+                jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_info_user_name_lower ON user_info (LOWER(user_name));");
+            } catch (Exception e) {
+                logger.warn("Could not create unique index on user_info(user_name) (duplicates may exist): {}", e.getMessage());
+            }
+
             logger.info("Database schema migration completed successfully.");
         } catch (Exception e) {
             logger.warn("Schema migration notice (columns may already exist or running in restricted mode): {}", e.getMessage());

@@ -21,6 +21,10 @@ import static com.video_streaming.project_video.Enums.SupportVariables.refreshTo
 import static com.video_streaming.project_video.Enums.SupportVariables.signInTokenURLSuffix;
 import static com.video_streaming.project_video.Enums.SupportVariables.resetUserURLSuffix;
 
+import com.video_streaming.project_video.Entity.User;
+import com.video_streaming.project_video.Repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,7 +33,18 @@ public class FirebaseAuthServiceImpl implements FirebaseAuthService {
 
     @Value("${firebase.api.key}")
     private String FIREBASE_API_KEY;
+
+    @Autowired
+    private UserRepository userRepository;
+
     private final RestTemplate restTemplate = new RestTemplate();
+
+    public FirebaseAuthServiceImpl() {}
+
+    public FirebaseAuthServiceImpl(UserRepository userRepository, String firebaseApiKey) {
+        this.userRepository = userRepository;
+        this.FIREBASE_API_KEY = firebaseApiKey;
+    }
 
     private String getSignInUrl() {
         return signInTokenURLSuffix + FIREBASE_API_KEY;
@@ -47,8 +62,22 @@ public class FirebaseAuthServiceImpl implements FirebaseAuthService {
         return FirebaseAuth.getInstance().verifyIdToken(idToken);
     }
 
+    public FirebaseSignInResponse signIn(String identifier, String password) {
+        return signInWithEmailAndPassword(identifier, password);
+    }
+
     public FirebaseSignInResponse signInWithEmailAndPassword(String email, String password) {
-        FirebaseSignInRequest request = new FirebaseSignInRequest(email, password, true);
+        String resolvedEmail = email;
+        if (email != null && !email.trim().isEmpty()) {
+            String trimmed = email.trim();
+            if (!trimmed.contains("@") && userRepository != null) {
+                resolvedEmail = userRepository.findFirstByUserNameIgnoreCase(trimmed)
+                        .map(User::getUser_email)
+                        .orElse(trimmed);
+            }
+        }
+
+        FirebaseSignInRequest request = new FirebaseSignInRequest(resolvedEmail, password, true);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<FirebaseSignInRequest> entity = new HttpEntity<>(request, headers);

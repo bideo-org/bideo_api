@@ -2,6 +2,27 @@ pipeline {
     agent any
 
     stages {
+        stage('Unit Tests') {
+            steps {
+                sh '''
+                    set -eux
+                    echo "🧪 Running backend unit tests..."
+
+                    # Ensure Maven is installed and accessible
+                    if ! command -v mvn >/dev/null 2>&1; then
+                        echo "📦 Maven not found. Installing..."
+                        apt-get update -qq && apt-get install -y -qq maven || {
+                            curl -fsSL https://dlcdn.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz | tar xz -C /opt/
+                            export PATH="/opt/apache-maven-3.9.9/bin:$PATH"
+                        }
+                    fi
+
+                    # Run isolated unit tests (auth, username resolution, SEO, slug utils)
+                    mvn test
+                '''
+            }
+        }
+
         stage('Deploy Backend') {
             steps {
                 sh '''
