@@ -8,8 +8,6 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '25', artifactNumToKeepStr: '10'))
         // Add timestamps to build logs
         timestamps()
-        // ANSI colored output for readable terminal logs
-        ansiColor('xterm')
         // Prevent concurrent builds from interfering with production state
         disableConcurrentBuilds()
     }
