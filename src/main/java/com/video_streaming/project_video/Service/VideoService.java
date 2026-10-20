@@ -97,9 +97,21 @@ public interface VideoService {
     VideoDTO updateVideoMetadata(Long videoId, String userId, VideoMetadataUpdateRequest updateRequest);
 
     /**
-     * Searches videos by keyword, category, and tag with pagination.
+     * Searches videos by keyword, multiple categories, and multiple tags with pagination.
      */
-    Page<VideoDTO> searchVideos(String query, VideoCategory category, String tag, Pageable pageable);
+    Page<VideoDTO> searchVideos(String query, List<VideoCategory> categories, List<String> tags, Pageable pageable);
+
+    /**
+     * Backward-compatible search for single category and single tag.
+     */
+    default Page<VideoDTO> searchVideos(String query, VideoCategory category, String tag, Pageable pageable) {
+        return searchVideos(
+                query,
+                category != null ? List.of(category) : null,
+                tag != null && !tag.isBlank() ? List.of(tag) : null,
+                pageable
+        );
+    }
 
     /**
      * Retrieves videos uploaded by current user.

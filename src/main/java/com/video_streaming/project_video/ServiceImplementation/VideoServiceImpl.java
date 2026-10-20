@@ -286,31 +286,41 @@ public class VideoServiceImpl implements VideoService {
     }
 
     @Override
-    public Page<VideoDTO> searchVideos(String query, VideoCategory category, String tag, Pageable pageable) {
+    public Page<VideoDTO> searchVideos(String query, List<VideoCategory> categories, List<String> tags, Pageable pageable) {
         String searchQuery = (query != null && !query.trim().isEmpty()) ? query.trim() : null;
-        String searchCategory = category != null ? category.name() : null;
-        String searchTag = (tag != null && !tag.trim().isEmpty()) ? tag.trim().toLowerCase() : null;
+        List<String> validCategories = (categories != null)
+                ? categories.stream().filter(Objects::nonNull).map(Enum::name).toList()
+                : Collections.emptyList();
+        List<String> validTags = (tags != null)
+                ? tags.stream().filter(t -> t != null && !t.isBlank()).map(t -> t.trim().toLowerCase()).toList()
+                : Collections.emptyList();
 
         Page<Video> page;
 
         if (searchQuery != null) {
             try {
-                // Tier 1: Try PostgreSQL native trigram similarity + ILIKE fuzzy search
-                page = videoRepository.searchVideosFuzzy(searchQuery, searchCategory, searchTag, pageable);
+                // If single category/tag or none, try fast native trigram similarity
+                String singleCat = validCategories.size() == 1 ? validCategories.get(0) : null;
+                String singleTag = validTags.size() == 1 ? validTags.get(0) : null;
+                if (validCategories.size() <= 1 && validTags.size() <= 1) {
+                    page = videoRepository.searchVideosFuzzy(searchQuery, singleCat, singleTag, pageable);
+                } else {
+                    page = searchVideosFallback(searchQuery, categories, validTags, pageable);
+                }
             } catch (Exception e) {
                 logger.warn("Native fuzzy search failed, falling back to multi-token specification search: {}", e.getMessage());
-                page = searchVideosFallback(searchQuery, category, searchTag, pageable);
+                page = searchVideosFallback(searchQuery, categories, validTags, pageable);
             }
         } else {
             // When no query keyword is given, browse/filter by category and tag
-            page = searchVideosFallback(null, category, searchTag, pageable);
+            page = searchVideosFallback(null, categories, validTags, pageable);
         }
 
         VideoDTOMapper mapper = new VideoDTOMapper();
         return page.map(mapper::convertEntityToDTO);
     }
 
-    private Page<Video> searchVideosFallback(String query, VideoCategory category, String tag, Pageable pageable) {
+    private Page<Video> searchVideosFallback(String query, List<VideoCategory> categories, List<String> tags, Pageable pageable) {
         Specification<Video> spec = (root, cq, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -336,13 +346,13 @@ public class VideoServiceImpl implements VideoService {
                 predicates.add(cb.or(termPredicates.toArray(new Predicate[0])));
             }
 
-            if (category != null) {
-                predicates.add(cb.equal(root.get("category"), category));
+            if (categories != null && !categories.isEmpty()) {
+                predicates.add(root.get("category").in(categories));
             }
 
-            if (tag != null && !tag.isBlank()) {
+            if (tags != null && !tags.isEmpty()) {
                 Join<Video, String> tagJoin = root.join("tags", JoinType.LEFT);
-                predicates.add(cb.equal(cb.lower(tagJoin), tag.toLowerCase()));
+                predicates.add(cb.lower(tagJoin).in(tags));
             }
 
             cq.distinct(true);

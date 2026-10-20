@@ -115,12 +115,12 @@ public class VideoController {
     @GetMapping("/search")
     public ResponseEntity<Page<VideoDTO>> searchVideos(
             @RequestParam(required = false) String query,
-            @RequestParam(required = false) VideoCategory category,
-            @RequestParam(required = false) String tag,
+            @RequestParam(required = false, name = "category") List<VideoCategory> categories,
+            @RequestParam(required = false, name = "tag") List<String> tags,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("videoId").descending());
-        Page<VideoDTO> results = videoService.searchVideos(query, category, tag, pageable);
+        Page<VideoDTO> results = videoService.searchVideos(query, categories, tags, pageable);
         return ResponseEntity.ok(results);
     }
 
