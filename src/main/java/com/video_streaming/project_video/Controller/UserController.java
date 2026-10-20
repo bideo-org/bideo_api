@@ -31,8 +31,12 @@ public class UserController {
     }
 
     @GetMapping("/getUser/{id}")
-    public ResponseEntity<UserDTO> getUserById(@PathVariable("id") String userId) {
-        UserDTO response = userService.getUserById(userId);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<?> getUserById(@PathVariable("id") String userId) {
+        try {
+            UserDTO response = userService.getUserById(userId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
     }
 }

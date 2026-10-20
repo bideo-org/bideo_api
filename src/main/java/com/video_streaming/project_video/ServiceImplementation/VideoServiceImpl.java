@@ -354,9 +354,17 @@ public class VideoServiceImpl implements VideoService {
     }
 
     @Override
-    public Page<VideoDTO> getVideosByUserId(String userId, Pageable pageable) {
+    public Page<VideoDTO> getVideosByUserId(String identifier, Pageable pageable) {
         VideoDTOMapper videoDTOMapper = new VideoDTOMapper();
-        return videoRepository.findByUploaderId(userId, pageable)
+        String resolvedUserId = identifier;
+        try {
+            UserDTO u = userService.getUserById(identifier);
+            if (u != null && u.getUserId() != null) {
+                resolvedUserId = u.getUserId();
+            }
+        } catch (Exception ignored) {
+        }
+        return videoRepository.findByUploaderId(resolvedUserId, pageable)
                 .map(videoDTOMapper::convertEntityToDTO);
     }
 

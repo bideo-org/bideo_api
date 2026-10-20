@@ -172,28 +172,38 @@ pipeline {
                     cd "${DEPLOY_ROOT}"
                     echo "📦 Identifying backend service name in docker-compose..."
 
-                    SERVICE_NAME="bideo_api"
-                    if ! $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "bideo_api"; then
-                        if $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "backend"; then
-                            SERVICE_NAME="backend"
-                        elif $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "api"; then
-                            SERVICE_NAME="api"
-                        else
-                            SERVICE_NAME=""
-                        fi
+                    ALL_SERVICES=$($DOCKER_COMPOSE config --services 2>/dev/null || $DOCKER_COMPOSE ps --services 2>/dev/null || echo "")
+                    echo "📋 Available docker-compose services: ${ALL_SERVICES}"
+
+                    SERVICE_NAME=""
+                    if echo "$ALL_SERVICES" | grep -qw "project_video"; then
+                        SERVICE_NAME="project_video"
+                    elif echo "$ALL_SERVICES" | grep -qw "bideo_api"; then
+                        SERVICE_NAME="bideo_api"
+                    elif echo "$ALL_SERVICES" | grep -qw "backend"; then
+                        SERVICE_NAME="backend"
+                    elif echo "$ALL_SERVICES" | grep -qw "app"; then
+                        SERVICE_NAME="app"
+                    elif echo "$ALL_SERVICES" | grep -qw "api"; then
+                        SERVICE_NAME="api"
+                    else
+                        # Fallback to project_video
+                        SERVICE_NAME="project_video"
                     fi
 
-                    # 5. Rebuild and restart only backend container
-                    if [ -n "$SERVICE_NAME" ]; then
-                        echo "🔄 Rebuilding container image for service: ${SERVICE_NAME}..."
-                        $DOCKER_COMPOSE build "$SERVICE_NAME"
-                        echo "🔄 Updating container with zero-downtime recreation..."
-                        $DOCKER_COMPOSE up -d --no-deps "$SERVICE_NAME"
-                    else
-                        echo "⚠️ Backend service name not matched in docker-compose services; performing general build..."
-                        $DOCKER_COMPOSE build
-                        $DOCKER_COMPOSE up -d
-                    fi
+                    echo "🎯 Identified backend service: ${SERVICE_NAME}"
+
+                    # 5. Rebuild and restart ONLY the backend container
+                    echo "🔄 Rebuilding container image for ONLY service: ${SERVICE_NAME}..."
+                    $DOCKER_COMPOSE build "$SERVICE_NAME"
+
+                    # Safely remove any stuck previous container to prevent 'removal in progress' daemon errors
+                    echo "🧹 Ensuring clean container state..."
+                    docker stop "$SERVICE_NAME" 2>/dev/null || docker stop bideo_api 2>/dev/null || true
+                    docker rm -f "$SERVICE_NAME" 2>/dev/null || docker rm -f bideo_api 2>/dev/null || true
+
+                    echo "🔄 Updating container with isolated zero-downtime recreation..."
+                    $DOCKER_COMPOSE up -d --no-deps "$SERVICE_NAME"
 
                     echo "✅ Container launch initiated!"
                 '''
@@ -215,13 +225,16 @@ pipeline {
 
                     cd "${DEPLOY_ROOT}" || true
 
-                    SERVICE_NAME="bideo_api"
-                    if ! $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "bideo_api"; then
-                        if $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "backend"; then
-                            SERVICE_NAME="backend"
-                        elif $DOCKER_COMPOSE ps --services 2>/dev/null | grep -qx "api"; then
-                            SERVICE_NAME="api"
-                        fi
+                    ALL_SERVICES=$($DOCKER_COMPOSE config --services 2>/dev/null || $DOCKER_COMPOSE ps --services 2>/dev/null || echo "")
+                    SERVICE_NAME="project_video"
+                    if echo "$ALL_SERVICES" | grep -qw "project_video"; then
+                        SERVICE_NAME="project_video"
+                    elif echo "$ALL_SERVICES" | grep -qw "bideo_api"; then
+                        SERVICE_NAME="bideo_api"
+                    elif echo "$ALL_SERVICES" | grep -qw "backend"; then
+                        SERVICE_NAME="backend"
+                    elif echo "$ALL_SERVICES" | grep -qw "app"; then
+                        SERVICE_NAME="app"
                     fi
 
                     HEALTH_VERIFIED=0

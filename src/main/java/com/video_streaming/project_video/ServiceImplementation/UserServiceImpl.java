@@ -93,15 +93,26 @@ public class UserServiceImpl implements UserService {
             return "User updated successfully";
     }
 
-    public UserDTO getUserById(String userId) {
+    public UserDTO getUserById(String identifier) {
+        if (identifier == null || identifier.trim().isEmpty()) {
+            throw new RuntimeException("User identifier is required");
+        }
+        String trimmed = identifier.trim();
         UserDTOMapper userDTOMapper = new UserDTOMapper();
-        User user = userRepository.getReferenceById(userId);
 
-        if (user == null) {
-            throw new RuntimeException("User not found with ID: " + userId);
+        // 1. Try finding by primary key (userId)
+        Optional<User> userOpt = userRepository.findById(trimmed);
+
+        // 2. If not found by UUID/userId, try finding by case-insensitive userName
+        if (userOpt.isEmpty()) {
+            userOpt = userRepository.findFirstByUserNameIgnoreCase(trimmed);
         }
 
-        return userDTOMapper.convertEntityToDTO(user);
+        if (userOpt.isEmpty()) {
+            throw new RuntimeException("User not found with ID or username: " + identifier);
+        }
+
+        return userDTOMapper.convertEntityToDTO(userOpt.get());
     }
 
     public String resolveEmailFromIdentifier(String identifier) {
