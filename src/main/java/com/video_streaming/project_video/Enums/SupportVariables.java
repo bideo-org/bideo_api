@@ -14,10 +14,17 @@ public interface SupportVariables {
             "/api/vid/user/**",
             "/api/vid/*/view",
             "/api/vid/*/engagement",
-            "/api/vid/*/comments/**"
+            "/api/vid/*/comments/**",
+            "/api/channel/*/status",
+            "/api/channel/*/subscribers",
+            "/api/playlists/*",
+            "/api/creator/*/analytics"
             );
 
     List<String> ALLOWED_ORIGINS = List.of(
+            "https://buzzclips.app",
+            "http://buzzclips.app",
+            "https://www.buzzclips.app",
             "https://bideo.rajit.cc",
             "http://bideo.rajit.cc",
             "https://www.bideo.rajit.cc"

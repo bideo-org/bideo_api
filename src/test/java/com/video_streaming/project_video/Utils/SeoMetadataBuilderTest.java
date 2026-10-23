@@ -47,7 +47,7 @@ public class SeoMetadataBuilderTest {
         assertNotNull(seo);
         assertEquals("Spring Boot SEO Masterclass", seo.getTitle());
         assertEquals("A comprehensive guide to backend SEO and metadata.", seo.getDescription());
-        assertEquals("https://bideo.rajit.cc/watch/spring-boot-seo-masterclass-a1b2", seo.getCanonicalUrl());
+        assertEquals("https://buzzclips.app/watch/spring-boot-seo-masterclass-a1b2", seo.getCanonicalUrl());
 
         // Check JSON-LD
         Map<String, Object> jsonLd = seo.getJsonLdVideoObject();
@@ -57,14 +57,14 @@ public class SeoMetadataBuilderTest {
         assertEquals("Spring Boot SEO Masterclass", jsonLd.get("name"));
         assertEquals("PT5M30S", jsonLd.get("duration"));
         assertEquals("https://s3.amazonaws.com/bucket/hls/output.m3u8", jsonLd.get("contentUrl"));
-        assertEquals("https://bideo.rajit.cc/embed/spring-boot-seo-masterclass-a1b2", jsonLd.get("embedUrl"));
+        assertEquals("https://buzzclips.app/embed/spring-boot-seo-masterclass-a1b2", jsonLd.get("embedUrl"));
         assertEquals("TECH", jsonLd.get("genre"));
         assertEquals("java, springboot, seo", jsonLd.get("keywords"));
 
         // Check OpenGraph
         Map<String, String> og = seo.getOpenGraph();
         assertNotNull(og);
-        assertEquals("bideo.rajit.cc", og.get("og:site_name"));
+        assertEquals("BuzzClips", og.get("og:site_name"));
         assertEquals("video.other", og.get("og:type"));
         assertEquals("https://s3.amazonaws.com/bucket/hls/thumbnail.webp", og.get("og:image"));
 
@@ -72,7 +72,7 @@ public class SeoMetadataBuilderTest {
         Map<String, String> tw = seo.getTwitterCard();
         assertNotNull(tw);
         assertEquals("player", tw.get("twitter:card"));
-        assertEquals("https://bideo.rajit.cc/embed/spring-boot-seo-masterclass-a1b2", tw.get("twitter:player"));
+        assertEquals("https://buzzclips.app/embed/spring-boot-seo-masterclass-a1b2", tw.get("twitter:player"));
     }
 
     @Test

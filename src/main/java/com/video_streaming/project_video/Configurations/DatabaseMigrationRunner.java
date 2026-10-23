@@ -102,6 +102,43 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                     ");");
             jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_watch_history_user_time ON watch_history(user_id, last_watched_at);");
 
+            // 9. Create subscriptions table
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS subscriptions (" +
+                    "id BIGSERIAL PRIMARY KEY, " +
+                    "subscriber_user_id VARCHAR(255) NOT NULL, " +
+                    "channel_user_id VARCHAR(255) NOT NULL, " +
+                    "created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, " +
+                    "CONSTRAINT uk_subscription UNIQUE (subscriber_user_id, channel_user_id)" +
+                    ");");
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_sub_channel ON subscriptions(channel_user_id);");
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_sub_subscriber ON subscriptions(subscriber_user_id);");
+
+            // 10. Create playlists table
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS playlists (" +
+                    "playlist_id BIGSERIAL PRIMARY KEY, " +
+                    "title VARCHAR(255) NOT NULL, " +
+                    "description TEXT, " +
+                    "user_id VARCHAR(255) NOT NULL, " +
+                    "visibility VARCHAR(50) DEFAULT 'PUBLIC', " +
+                    "is_system BOOLEAN DEFAULT FALSE, " +
+                    "created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, " +
+                    "updated_at TIMESTAMP WITHOUT TIME ZONE" +
+                    ");");
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_playlist_user ON playlists(user_id);");
+
+            // 11. Create playlist_videos table
+            jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS playlist_videos (" +
+                    "id BIGSERIAL PRIMARY KEY, " +
+                    "playlist_id BIGINT NOT NULL, " +
+                    "video_id BIGINT NOT NULL, " +
+                    "position INT DEFAULT 0, " +
+                    "added_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, " +
+                    "CONSTRAINT uk_playlist_video UNIQUE (playlist_id, video_id), " +
+                    "CONSTRAINT fk_pv_playlist FOREIGN KEY (playlist_id) REFERENCES playlists(playlist_id) ON DELETE CASCADE, " +
+                    "CONSTRAINT fk_pv_video FOREIGN KEY (video_id) REFERENCES vid_metadata(video_id) ON DELETE CASCADE" +
+                    ");");
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_pv_playlist ON playlist_videos(playlist_id, position);");
+
             logger.info("Database schema migration completed successfully.");
         } catch (Exception e) {
             logger.warn("Schema migration notice (columns may already exist or running in restricted mode): {}", e.getMessage());

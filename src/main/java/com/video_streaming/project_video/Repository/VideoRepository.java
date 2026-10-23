@@ -82,4 +82,7 @@ public interface VideoRepository extends JpaRepository<Video, Long>, JpaSpecific
     @Modifying
     @Query("UPDATE Video v SET v.likesCount = :likes, v.dislikesCount = :dislikes WHERE v.videoId = :videoId")
     int updateEngagementCounts(@Param("videoId") Long videoId, @Param("likes") Long likes, @Param("dislikes") Long dislikes);
+
+    @Query("SELECT v FROM Video v WHERE v.video_uploader.userId IN :channelUserIds AND (v.visibility = 'PUBLIC' OR v.visibility IS NULL) AND (v.videoStatus = 'COMPLETED' OR v.videoStatus IS NULL) ORDER BY v.videoId DESC")
+    Page<Video> findSubscriptionFeed(@Param("channelUserIds") java.util.List<String> channelUserIds, Pageable pageable);
 }

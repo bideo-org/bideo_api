@@ -19,7 +19,7 @@ pipeline {
         DEPLOY_ROOT = '/home/rajit/Bideo_proj'
         BACKEND_DIR = '/home/rajit/Bideo_proj/bideo_api'
         LOCAL_HEALTH_URL = 'http://localhost:8080/api/health'
-        PUBLIC_HEALTH_URL = 'https://bideo.rajit.cc/api/health'
+        PUBLIC_HEALTH_URL = 'https://buzzclips.app/api/health'
     }
 
     stages {

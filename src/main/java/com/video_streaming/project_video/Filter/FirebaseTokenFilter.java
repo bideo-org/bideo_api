@@ -29,9 +29,7 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getServletPath();
-        return WHITELISTED_PATHS.stream()
-                .anyMatch(whitelistPattern -> pathMatcher.match(whitelistPattern, path));
+        return false;
     }
 
     @Override
@@ -43,6 +41,10 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_OK);
             return; // To allow preflight requests to pass through
         }
+
+        String path = request.getServletPath();
+        boolean isWhitelisted = WHITELISTED_PATHS.stream()
+                .anyMatch(whitelistPattern -> pathMatcher.match(whitelistPattern, path));
 
         String authHeader = request.getHeader("Authorization");
 
@@ -58,13 +60,17 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (FirebaseAuthException e) {
-                logger.error(e.getMessage());
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.getWriter().write("Invalid Firebase ID token: " + e.getMessage());
-                return;
+                if (isWhitelisted) {
+                    logger.warn("Invalid Firebase ID token on whitelisted path {}: {}", path, e.getMessage());
+                } else {
+                    logger.error(e.getMessage());
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.getWriter().write("Invalid Firebase ID token: " + e.getMessage());
+                    return;
+                }
             }
-        } else {
-            logger.error("Authorization header not found or invalid");
+        } else if (!isWhitelisted) {
+            logger.error("Authorization header not found or invalid for secured path: {}", path);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.getWriter().write("Missing or invalid Authorization header");
             return;

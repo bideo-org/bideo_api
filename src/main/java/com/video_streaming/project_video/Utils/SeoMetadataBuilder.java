@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class SeoMetadataBuilder {
 
-    private static final String BASE_URL = "https://bideo.rajit.cc";
+    private static final String BASE_URL = "https://buzzclips.app";
 
     public SeoMetadataDTO buildSeoMetadata(Video video) {
         if (video == null) {
@@ -21,7 +21,7 @@ public class SeoMetadataBuilder {
         String title = video.getVideo_title() != null ? video.getVideo_title() : "Untitled Video";
         String description = (video.getDescription() != null && !video.getDescription().isBlank())
                 ? video.getDescription()
-                : "Watch " + title + " on bideo.rajit.cc";
+                : "Watch " + title + " on buzzclips.app";
 
         String identifier = (video.getSlug() != null && !video.getSlug().isBlank())
                 ? video.getSlug()
@@ -72,7 +72,7 @@ public class SeoMetadataBuilder {
         // Open Graph
         String truncatedDescription = description.length() > 200 ? description.substring(0, 197) + "..." : description;
         Map<String, String> openGraph = new LinkedHashMap<>();
-        openGraph.put("og:site_name", "bideo.rajit.cc");
+        openGraph.put("og:site_name", "BuzzClips");
         openGraph.put("og:type", "video.other");
         openGraph.put("og:title", title);
         openGraph.put("og:description", truncatedDescription);
@@ -86,7 +86,7 @@ public class SeoMetadataBuilder {
         // Twitter Card
         Map<String, String> twitterCard = new LinkedHashMap<>();
         twitterCard.put("twitter:card", "player");
-        twitterCard.put("twitter:site", "@bideo");
+        twitterCard.put("twitter:site", "@buzzclips");
         twitterCard.put("twitter:title", title);
         twitterCard.put("twitter:description", truncatedDescription);
         twitterCard.put("twitter:image", thumbnailUrl);

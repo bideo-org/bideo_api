@@ -6,8 +6,8 @@ This guide provides instructions and copy-pasteable TypeScript/React code snippe
 
 ## 1. Domain & API Endpoints
 
-- **Production Domain**: `https://bideo.rajit.cc`
-- **Backend API Base**: `https://bideo.rajit.cc/api` (or `http://localhost:8085/api` during local development)
+- **Production Domain**: `https://buzzclips.app`
+- **Backend API Base**: `https://buzzclips.app/api` (or `http://localhost:8085/api` during local development)
 
 ### Available API Endpoints
 
@@ -108,7 +108,7 @@ export const VideoSeoHead: React.FC<VideoSeoHeadProps> = ({ video }) => {
     if (!seo) return;
 
     // Document title
-    document.title = `${seo.title} | bideo.rajit.cc`;
+    document.title = `${seo.title} | BuzzClips`;
 
     // Helper to set or create meta tags
     const setMetaTag = (property: string, content: string, isName = false) => {
@@ -530,4 +530,126 @@ export function useResumePlayback(
   return { onTimeUpdate };
 }
 ```
+
+---
+
+## 11. Channel Subscriptions & Follow Feed
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/channel/{channelId}/subscribe` | Toggle subscribe/unsubscribe (Requires Auth) |
+| `GET` | `/api/channel/{channelId}/status` | Check subscription status and subscriber count (Optional Auth) |
+| `GET` | `/api/channel/{channelId}/subscribers` | Get public subscriber count |
+| `GET` | `/api/feed/subscriptions?page=0&size=20` | Get chronological video feed from subscribed channels (Requires Auth) |
+
+### Subscribe Button Component (`SubscribeButton.tsx`)
+
+```tsx
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+interface SubscribeButtonProps {
+  channelId: string;
+  token?: string;
+}
+
+export const SubscribeButton: React.FC<SubscribeButtonProps> = ({ channelId, token }) => {
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [subscriberCount, setSubscriberCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    axios.get(`/api/channel/${channelId}/status`, { headers })
+      .then(res => {
+        setIsSubscribed(res.data.subscribed);
+        setSubscriberCount(res.data.subscriberCount);
+      })
+      .catch(console.error);
+  }, [channelId, token]);
+
+  const handleToggle = async () => {
+    if (!token) {
+      alert("Please sign in to subscribe");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await axios.post(`/api/channel/${channelId}/subscribe`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setIsSubscribed(res.data.subscribed);
+      setSubscriberCount(res.data.subscriberCount);
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update subscription");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleToggle}
+      disabled={loading}
+      className={`px-4 py-2 rounded-full font-semibold transition ${
+        isSubscribed
+          ? 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+          : 'bg-white text-black hover:bg-neutral-200'
+      }`}
+    >
+      {isSubscribed ? 'Subscribed' : 'Subscribe'} ({subscriberCount.toLocaleString()})
+    </button>
+  );
+};
+```
+
+---
+
+## 12. Playlists & Watch Later
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/playlists` | Create custom playlist (`{ title, description, visibility }`) |
+| `GET` | `/api/playlists/my` | Get current user's playlists (Auto-provisions Watch Later) |
+| `GET` | `/api/playlists/{playlistId}` | Get playlist details with ordered video list |
+| `POST` | `/api/playlists/{playlistId}/videos/{videoId}` | Add video to playlist |
+| `DELETE` | `/api/playlists/{playlistId}/videos/{videoId}` | Remove video from playlist |
+| `DELETE` | `/api/playlists/{playlistId}` | Delete playlist |
+| `POST` | `/api/playlists/watch-later/{videoId}` | Toggle video in Watch Later |
+
+---
+
+## 13. Creator Studio Analytics
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/creator/analytics` | Get current authenticated creator's studio metrics (Requires Auth) |
+| `GET` | `/api/creator/{creatorId}/analytics` | Get public creator channel overview |
+
+### Response Schema (`CreatorAnalyticsDTO`)
+
+```json
+{
+  "creatorUserId": "firebase-uid-123",
+  "totalVideos": 14,
+  "totalViews": 245000,
+  "totalLikes": 18200,
+  "totalSubscribers": 5420,
+  "topVideos": [
+    {
+      "videoId": 105,
+      "video_title": "BuzzClips Launch Masterclass",
+      "video_views": 120500,
+      "likesCount": 9400
+    }
+  ]
+}
+```
+
 
