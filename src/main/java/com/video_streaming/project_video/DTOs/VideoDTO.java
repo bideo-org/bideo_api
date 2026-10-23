@@ -24,6 +24,8 @@ public class VideoDTO implements Serializable {
     private VideoVisibility visibility;
     private Date video_uploadDate;
     private Long video_views;
+    private Long likesCount;
+    private Long dislikesCount;
     private String m3u8Url;
     private UserDTO video_uploader;
     private String video_duration;

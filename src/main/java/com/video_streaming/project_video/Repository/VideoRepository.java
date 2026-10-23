@@ -78,4 +78,8 @@ public interface VideoRepository extends JpaRepository<Video, Long>, JpaSpecific
     @Modifying
     @Query("UPDATE Video v SET v.video_views = v.video_views + :views WHERE v.videoId = :videoId")
     int incrementViews(@Param("videoId") Long videoId, @Param("views") Long views);
+
+    @Modifying
+    @Query("UPDATE Video v SET v.likesCount = :likes, v.dislikesCount = :dislikes WHERE v.videoId = :videoId")
+    int updateEngagementCounts(@Param("videoId") Long videoId, @Param("likes") Long likes, @Param("dislikes") Long dislikes);
 }

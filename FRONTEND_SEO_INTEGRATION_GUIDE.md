@@ -308,3 +308,226 @@ export const searchVideos = async (
   return response.data; // Page<VideoDTO>
 };
 ```
+
+---
+
+## 8. Video Likes & Dislikes (Redis-Backed O(1))
+
+### API Endpoints
+- `GET /api/vid/{videoId}/engagement` (Public / Optional Auth): Returns `{ videoId, likesCount, dislikesCount, userReaction }`
+- `POST /api/vid/{videoId}/like` (Bearer Token): Toggles like (or switches from dislike)
+- `POST /api/vid/{videoId}/dislike` (Bearer Token): Toggles dislike (or switches from like)
+
+### React Component Snippet (`EngagementButtons.tsx`):
+```tsx
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+
+interface EngagementDTO {
+  videoId: number;
+  likesCount: number;
+  dislikesCount: number;
+  userReaction: 'LIKE' | 'DISLIKE' | 'NONE';
+}
+
+export const EngagementButtons: React.FC<{ videoId: number; token?: string }> = ({ videoId, token }) => {
+  const [data, setData] = useState<EngagementDTO | null>(null);
+
+  useEffect(() => {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    axios.get<EngagementDTO>(`/api/vid/${videoId}/engagement`, { headers })
+      .then(res => setData(res.data))
+      .catch(console.error);
+  }, [videoId, token]);
+
+  const handleLike = async () => {
+    if (!token) return alert('Please sign in to like');
+    const res = await axios.post<EngagementDTO>(`/api/vid/${videoId}/like`, {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setData(res.data);
+  };
+
+  const handleDislike = async () => {
+    if (!token) return alert('Please sign in to dislike');
+    const res = await axios.post<EngagementDTO>(`/api/vid/${videoId}/dislike`, {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setData(res.data);
+  };
+
+  if (!data) return null;
+
+  return (
+    <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-1.5 w-fit">
+      <button
+        onClick={handleLike}
+        className={`flex items-center gap-1.5 font-medium ${data.userReaction === 'LIKE' ? 'text-blue-600' : 'text-gray-700 dark:text-gray-200'}`}
+      >
+        👍 <span>{data.likesCount}</span>
+      </button>
+      <span className="text-gray-400">|</span>
+      <button
+        onClick={handleDislike}
+        className={`flex items-center gap-1.5 font-medium ${data.userReaction === 'DISLIKE' ? 'text-red-500' : 'text-gray-700 dark:text-gray-200'}`}
+      >
+        👎 <span>{data.dislikesCount}</span>
+      </button>
+    </div>
+  );
+};
+```
+
+---
+
+## 9. Threaded Comments Component with Timestamp Seeking
+
+### API Endpoints
+- `GET /api/vid/{videoId}/comments?sort=newest|top&page=&size=` (Public read)
+- `GET /api/vid/comments/{commentId}/replies` (Public read)
+- `POST /api/vid/{videoId}/comments` (Authenticated) `{ content: string, parentCommentId?: number, timestampInSeconds?: number }`
+- `DELETE /api/vid/comments/{commentId}` (Author or Video Creator)
+- `POST /api/vid/comments/{commentId}/pin` (Video Creator only)
+
+### React Component Snippet (`CommentsSection.tsx`):
+```tsx
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+
+export interface CommentDTO {
+  commentId: number;
+  content: string;
+  timestampInSeconds?: number;
+  likeCount: number;
+  isPinned: boolean;
+  replyCount: number;
+  createdAt: string;
+  user: {
+    userId: string;
+    user_name: string;
+    avatar_url?: string;
+  };
+}
+
+export const CommentsSection: React.FC<{
+  videoId: number;
+  token?: string;
+  onSeekTo?: (seconds: number) => void;
+}> = ({ videoId, token, onSeekTo }) => {
+  const [comments, setComments] = useState<CommentDTO[]>([]);
+  const [newComment, setNewComment] = useState('');
+
+  const fetchComments = () => {
+    axios.get(`/api/vid/${videoId}/comments?sort=newest`)
+      .then(res => setComments(res.data.content || []))
+      .catch(console.error);
+  };
+
+  useEffect(() => {
+    fetchComments();
+  }, [videoId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim() || !token) return;
+
+    await axios.post(
+      `/api/vid/${videoId}/comments`,
+      { content: newComment },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setNewComment('');
+    fetchComments();
+  };
+
+  return (
+    <div className="mt-8 space-y-4">
+      <h3 className="text-xl font-bold">{comments.length} Comments</h3>
+      {token && (
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={newComment}
+            onChange={e => setNewComment(e.target.value)}
+            placeholder="Add a comment... (Tip: include 01:23 for video timestamps!)"
+            className="flex-1 px-4 py-2 border rounded-lg dark:bg-gray-800"
+          />
+          <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg">Comment</button>
+        </form>
+      )}
+
+      <div className="space-y-4 mt-6">
+        {comments.map(c => (
+          <div key={c.commentId} className={`p-4 rounded-xl border ${c.isPinned ? 'border-amber-400 bg-amber-50/20' : 'border-gray-200'}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <img src={c.user?.avatar_url || '/default-avatar.png'} alt="" className="w-6 h-6 rounded-full" />
+              <span className="font-semibold text-sm">{c.user?.user_name}</span>
+              {c.isPinned && <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded">📌 Pinned by creator</span>}
+            </div>
+            <p className="text-gray-800 dark:text-gray-200 text-sm">
+              {c.content}
+              {c.timestampInSeconds != null && onSeekTo && (
+                <button
+                  type="button"
+                  onClick={() => onSeekTo(c.timestampInSeconds!)}
+                  className="ml-2 text-blue-500 font-mono underline hover:text-blue-700"
+                >
+                  ▶ Jump to {Math.floor(c.timestampInSeconds / 60)}:{(c.timestampInSeconds % 60).toString().padStart(2, '0')}
+                </button>
+              )}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+```
+
+---
+
+## 10. Cross-Device Resume Playback Hook (`useResumePlayback.ts`)
+
+```typescript
+import { useEffect, useRef } from 'react';
+import axios from 'axios';
+
+export function useResumePlayback(
+  videoId: number,
+  videoRef: React.RefObject<HTMLVideoElement>,
+  token?: string
+) {
+  const lastHeartbeat = useRef(0);
+
+  // 1. Fetch saved progress on mount
+  useEffect(() => {
+    if (!token || !videoId) return;
+
+    axios.get(`/api/vid/${videoId}/progress`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(res => {
+      const savedSeconds = res.data?.progressSeconds || 0;
+      if (savedSeconds > 5 && !res.data?.completed && videoRef.current) {
+        videoRef.current.currentTime = savedSeconds;
+      }
+    }).catch(console.error);
+  }, [videoId, token]);
+
+  // 2. Heartbeat progress every 10 seconds during playback
+  const onTimeUpdate = () => {
+    if (!token || !videoRef.current) return;
+    const now = Date.now();
+    if (now - lastHeartbeat.current > 10000) {
+      lastHeartbeat.current = now;
+      const current = videoRef.current.currentTime;
+      const duration = videoRef.current.duration;
+      axios.post(`/api/vid/${videoId}/progress?seconds=${current}&duration=${duration}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
+  };
+
+  return { onTimeUpdate };
+}
+```
+

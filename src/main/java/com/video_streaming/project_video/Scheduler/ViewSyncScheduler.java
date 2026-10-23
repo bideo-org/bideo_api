@@ -13,14 +13,21 @@ public class ViewSyncScheduler {
 
     private static final Logger logger = LoggerFactory.getLogger(ViewSyncScheduler.class);
     private final ViewTrackingService viewTrackingService;
+    private final com.video_streaming.project_video.Service.EngagementService engagementService;
 
-    // Run every 60 seconds to flush accumulated Redis view counts into PostgreSQL
+    // Run every 60 seconds to flush accumulated Redis view and engagement counts into PostgreSQL
     @Scheduled(fixedRateString = "${views.sync.rate.ms:60000}")
     public void syncViews() {
         try {
             viewTrackingService.flushPendingViewsToDatabase();
         } catch (Exception e) {
             logger.error("Error occurred while syncing pending views to database: {}", e.getMessage());
+        }
+
+        try {
+            engagementService.flushPendingEngagementToDatabase();
+        } catch (Exception e) {
+            logger.error("Error occurred while syncing pending engagement to database: {}", e.getMessage());
         }
     }
 }

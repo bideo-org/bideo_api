@@ -12,7 +12,9 @@ public interface SupportVariables {
             "/api/vid/search",
             "/api/vid/all",
             "/api/vid/user/**",
-            "/api/vid/*/view"
+            "/api/vid/*/view",
+            "/api/vid/*/engagement",
+            "/api/vid/*/comments/**"
             );
 
     List<String> ALLOWED_ORIGINS = List.of(

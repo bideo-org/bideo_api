@@ -138,9 +138,16 @@ public class VideoController {
     @PutMapping("/{videoId}")
     public ResponseEntity<VideoDTO> updateVideoMetadata(
             @PathVariable Long videoId,
-            @RequestParam String userId,
+            @RequestParam(required = false) String userId,
             @RequestBody VideoMetadataUpdateRequest updateRequest) {
-        VideoDTO updatedVideo = videoService.updateVideoMetadata(videoId, userId, updateRequest);
+        String authenticatedUserId = com.video_streaming.project_video.Utils.SecurityUtils.getCurrentUserIdOptional().orElse(userId);
+        if (userId != null && !userId.isBlank()) {
+            var currentOpt = com.video_streaming.project_video.Utils.SecurityUtils.getCurrentUserIdOptional();
+            if (currentOpt.isPresent() && !currentOpt.get().equals(userId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+        }
+        VideoDTO updatedVideo = videoService.updateVideoMetadata(videoId, authenticatedUserId, updateRequest);
         return ResponseEntity.ok(updatedVideo);
     }
 
@@ -177,6 +184,10 @@ public class VideoController {
 
     @RequestMapping(value = "/user/{userId}/{videoId}", method = {RequestMethod.POST, RequestMethod.DELETE})
     public ResponseEntity<String> deleteVideoByUser(@PathVariable String userId, @PathVariable Long videoId) {
+        var currentOpt = com.video_streaming.project_video.Utils.SecurityUtils.getCurrentUserIdOptional();
+        if (currentOpt.isPresent() && !currentOpt.get().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Unauthorized to delete this video");
+        }
         boolean response = videoService.deleteVideo(userId, videoId);
         if (response) {
             return ResponseEntity.ok("Successfully deleted video");

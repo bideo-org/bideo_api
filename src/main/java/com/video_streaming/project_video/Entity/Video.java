@@ -55,6 +55,14 @@ public class Video {
     @Builder.Default
     private Long video_views = 0L;
 
+    @Builder.Default
+    @Column(name = "likes_count")
+    private Long likesCount = 0L;
+
+    @Builder.Default
+    @Column(name = "dislikes_count")
+    private Long dislikesCount = 0L;
+
     private String video_duration;
     private String iso_duration;
     private String thumbnail_url;

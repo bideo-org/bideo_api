@@ -23,6 +23,8 @@ public class VideoDTOMapper {
         videoDTO.setVisibility(video.getVisibility());
         videoDTO.setVideo_uploadDate(video.getVideo_uploadDate());
         videoDTO.setVideo_views(video.getVideo_views());
+        videoDTO.setLikesCount(video.getLikesCount() != null ? video.getLikesCount() : 0L);
+        videoDTO.setDislikesCount(video.getDislikesCount() != null ? video.getDislikesCount() : 0L);
         videoDTO.setVideo_duration(video.getVideo_duration());
         videoDTO.setIso_duration(video.getIso_duration());
         videoDTO.setThumbnail_url(video.getThumbnail_url());
@@ -51,6 +53,8 @@ public class VideoDTOMapper {
         video.setVisibility(videoDTO.getVisibility());
         video.setVideo_uploadDate(videoDTO.getVideo_uploadDate());
         video.setVideo_views(videoDTO.getVideo_views());
+        video.setLikesCount(videoDTO.getLikesCount() != null ? videoDTO.getLikesCount() : 0L);
+        video.setDislikesCount(videoDTO.getDislikesCount() != null ? videoDTO.getDislikesCount() : 0L);
         video.setVideo_duration(videoDTO.getVideo_duration());
         video.setIso_duration(videoDTO.getIso_duration());
         video.setThumbnail_url(videoDTO.getThumbnail_url());
