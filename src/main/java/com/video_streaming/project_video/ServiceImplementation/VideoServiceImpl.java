@@ -58,6 +58,7 @@ public class VideoServiceImpl implements VideoService {
     private final RedisTemplate<String, VideoDTO> videoRedisTemplate;
     private final RedisTemplate<String, Long> viewsRedisTemplate;
     private final com.video_streaming.project_video.Service.ViewTrackingService viewTrackingService;
+    private final com.video_streaming.project_video.Service.EngagementService engagementService;
 
     private static final Duration VIDEO_CACHE_TTL = Duration.ofMinutes(cacheTTLMinutesVideo);
     private static final Duration VIEWS_CACHE_TTL = Duration.ofMinutes(cacheTTLMinutesViews);
@@ -218,6 +219,8 @@ public class VideoServiceImpl implements VideoService {
         VideoDTO cached = videoRedisTemplate.opsForValue().get(videoKey);
         if (cached != null) {
             cached.setVideo_views(viewTrackingService.getEffectiveViews(cached.getVideoId(), cached.getVideo_views()));
+            cached.setLikesCount(engagementService.getLikesCount(cached.getVideoId(), cached.getLikesCount()));
+            cached.setDislikesCount(engagementService.getDislikesCount(cached.getVideoId(), cached.getDislikesCount()));
             return cached;
         }
 
@@ -233,6 +236,8 @@ public class VideoServiceImpl implements VideoService {
             videoRedisTemplate.opsForValue().set("video:slug:" + video.getSlug(), videoDTO, VIDEO_CACHE_TTL);
         }
         videoDTO.setVideo_views(viewTrackingService.getEffectiveViews(videoDTO.getVideoId(), videoDTO.getVideo_views()));
+        videoDTO.setLikesCount(engagementService.getLikesCount(videoDTO.getVideoId(), videoDTO.getLikesCount()));
+        videoDTO.setDislikesCount(engagementService.getDislikesCount(videoDTO.getVideoId(), videoDTO.getDislikesCount()));
         return videoDTO;
     }
 
@@ -243,6 +248,8 @@ public class VideoServiceImpl implements VideoService {
         VideoDTO cached = videoRedisTemplate.opsForValue().get(slugKey);
         if (cached != null) {
             cached.setVideo_views(viewTrackingService.getEffectiveViews(cached.getVideoId(), cached.getVideo_views()));
+            cached.setLikesCount(engagementService.getLikesCount(cached.getVideoId(), cached.getLikesCount()));
+            cached.setDislikesCount(engagementService.getDislikesCount(cached.getVideoId(), cached.getDislikesCount()));
             return cached;
         }
 
@@ -255,6 +262,8 @@ public class VideoServiceImpl implements VideoService {
         videoRedisTemplate.opsForValue().set(slugKey, videoDTO, VIDEO_CACHE_TTL);
         videoRedisTemplate.opsForValue().set("video:id:" + video.getVideoId(), videoDTO, VIDEO_CACHE_TTL);
         videoDTO.setVideo_views(viewTrackingService.getEffectiveViews(videoDTO.getVideoId(), videoDTO.getVideo_views()));
+        videoDTO.setLikesCount(engagementService.getLikesCount(videoDTO.getVideoId(), videoDTO.getLikesCount()));
+        videoDTO.setDislikesCount(engagementService.getDislikesCount(videoDTO.getVideoId(), videoDTO.getDislikesCount()));
         return videoDTO;
     }
 
