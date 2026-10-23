@@ -16,9 +16,11 @@ public interface VideoLikeRepository extends JpaRepository<VideoLike, Long> {
 
     java.util.List<VideoLike> findByVideoId(Long videoId);
 
-    long countByVideoIdAndIsLike(Long videoId, boolean isLike);
+    @Query("SELECT COUNT(vl) FROM VideoLike vl WHERE vl.videoId = :videoId AND vl.isLike = :isLike")
+    long countByVideoIdAndIsLike(@Param("videoId") Long videoId, @Param("isLike") boolean isLike);
 
-    Page<VideoLike> findByUserIdAndIsLikeOrderByCreatedAtDesc(String userId, boolean isLike, Pageable pageable);
+    @Query("SELECT vl FROM VideoLike vl WHERE vl.userId = :userId AND vl.isLike = :isLike ORDER BY vl.createdAt DESC")
+    Page<VideoLike> findByUserIdAndIsLikeOrderByCreatedAtDesc(@Param("userId") String userId, @Param("isLike") boolean isLike, Pageable pageable);
 
     @Modifying
     @Query("DELETE FROM VideoLike vl WHERE vl.videoId = :videoId AND vl.userId = :userId")
