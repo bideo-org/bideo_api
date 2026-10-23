@@ -1,10 +1,15 @@
 package com.video_streaming.project_video.Controller;
 
+import com.video_streaming.project_video.DTOs.CompletePresignedUploadDTO;
+import com.video_streaming.project_video.DTOs.PresignedUploadRequestDTO;
+import com.video_streaming.project_video.DTOs.PresignedUploadResponseDTO;
 import com.video_streaming.project_video.DTOs.VideoDTO;
 import com.video_streaming.project_video.DTOs.VideoMetadataUpdateRequest;
 import com.video_streaming.project_video.Enums.VideoCategory;
 import com.video_streaming.project_video.Enums.VideoVisibility;
 import com.video_streaming.project_video.Service.VideoService;
+import com.video_streaming.project_video.Utils.SecurityUtils;
+import com.video_streaming.project_video.Utils.TranscodeProgressManager;
 
 import lombok.RequiredArgsConstructor;
 
@@ -17,9 +22,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.apache.tika.Tika;
 
 import com.video_streaming.project_video.Service.ViewTrackingService;
@@ -40,6 +47,35 @@ public class VideoController {
     private final VideoService videoService;
     private final SenderProcessService messageSender;
     private final ViewTrackingService viewTrackingService;
+    private final TranscodeProgressManager transcodeProgressManager;
+
+    @PostMapping("/upload/presigned")
+    public ResponseEntity<PresignedUploadResponseDTO> generatePresignedUploadUrl(
+            @RequestBody PresignedUploadRequestDTO request) {
+        String userId = SecurityUtils.getCurrentUserId();
+        PresignedUploadResponseDTO response = videoService.generatePresignedUploadUrl(
+                request != null ? request.getFileName() : null,
+                request != null ? request.getContentType() : null,
+                userId
+        );
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/upload/complete-presigned")
+    public ResponseEntity<Map<String, Object>> completePresignedUpload(
+            @RequestBody CompletePresignedUploadDTO request) throws IOException {
+        String userId = SecurityUtils.getCurrentUserId();
+        Long videoId = videoService.completePresignedUpload(request, userId);
+        return ResponseEntity.ok(Map.of(
+                "videoId", videoId,
+                "message", "Presigned upload completed and queued for multi-rendition transcoding"
+        ));
+    }
+
+    @GetMapping(value = "/{videoId}/transcode-progress", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter getTranscodeProgress(@PathVariable Long videoId) {
+        return transcodeProgressManager.subscribe(videoId);
+    }
 
     @PostMapping("/upload")
     public ResponseEntity<String> uploadVidResponseEntity(

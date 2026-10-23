@@ -28,6 +28,8 @@ public class VideoDTOMapper {
         videoDTO.setVideo_duration(video.getVideo_duration());
         videoDTO.setIso_duration(video.getIso_duration());
         videoDTO.setThumbnail_url(video.getThumbnail_url());
+        videoDTO.setStoryboard_url(video.getStoryboard_url());
+        videoDTO.setVtt_url(video.getVtt_url());
         videoDTO.setVideoStatus(video.getVideoStatus());
 
         if (video.getVideo_uploader() != null) {
@@ -58,6 +60,8 @@ public class VideoDTOMapper {
         video.setVideo_duration(videoDTO.getVideo_duration());
         video.setIso_duration(videoDTO.getIso_duration());
         video.setThumbnail_url(videoDTO.getThumbnail_url());
+        video.setStoryboard_url(videoDTO.getStoryboard_url());
+        video.setVtt_url(videoDTO.getVtt_url());
         video.setVideoStatus(videoDTO.getVideoStatus());
 
         if (videoDTO.getVideo_uploader() != null) {

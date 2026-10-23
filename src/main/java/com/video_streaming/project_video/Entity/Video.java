@@ -67,6 +67,12 @@ public class Video {
     private String iso_duration;
     private String thumbnail_url;
 
+    @Column(name = "storyboard_url")
+    private String storyboard_url;
+
+    @Column(name = "vtt_url")
+    private String vtt_url;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     private VideoStatus videoStatus = VideoStatus.PENDING;

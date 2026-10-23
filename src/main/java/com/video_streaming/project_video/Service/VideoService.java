@@ -1,5 +1,7 @@
 package com.video_streaming.project_video.Service;
 
+import com.video_streaming.project_video.DTOs.CompletePresignedUploadDTO;
+import com.video_streaming.project_video.DTOs.PresignedUploadResponseDTO;
 import com.video_streaming.project_video.DTOs.VideoDTO;
 import com.video_streaming.project_video.DTOs.VideoMetadataUpdateRequest;
 import com.video_streaming.project_video.Enums.VideoCategory;
@@ -22,11 +24,31 @@ public interface VideoService {
     String uploadFile(File file);
 
     /**
+     * Generates an AWS S3 presigned PUT URL allowing clients to upload videos directly to S3,
+     * bypassing server multipart size limitations.
+     *
+     * @param fileName Original file name
+     * @param contentType MIME content type (e.g., video/mp4)
+     * @param userId Authenticated user ID
+     * @return PresignedUploadResponseDTO containing upload URL, key, and public S3 URL
+     */
+    PresignedUploadResponseDTO generatePresignedUploadUrl(String fileName, String contentType, String userId);
+
+    /**
+     * Completes a presigned upload by registering the video metadata and queueing it for transcoding.
+     *
+     * @param request Metadata and S3 key
+     * @param userId Authenticated user ID
+     * @return Created video ID
+     */
+    Long completePresignedUpload(CompletePresignedUploadDTO request, String userId) throws IOException;
+
+    /**
      * Uploads a directory containing video files to the server.
      *
      * @param directory The directory containing video files.
      * @param fileNamePrefix A prefix for the file names.
-     * @return Strings for m3u8 file and thumbnail url indicating the result of the upload operation.
+     * @return Strings for m3u8 file, thumbnail url, storyboard url, and vtt url.
      */
     String[] uploadDirectory(File directory, String fileNamePrefix);
 
@@ -61,6 +83,11 @@ public interface VideoService {
     ) throws IOException;
 
     /**
+     * Updates the encoded video path, thumbnail, storyboard, and vtt URLs with success flag.
+     */
+    void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL, String s3StoryboardURL, String s3VttURL, boolean flag);
+
+    /**
      * Updates the encoded video path for a specific video with success flag.
      *
      * @param videoID The ID of the video.
@@ -68,12 +95,16 @@ public interface VideoService {
      * @param s3ThumbnailURL The path for thumbnail of video to be set.
      * @param flag The flag to check if video upload successful or failed.
      */
-    void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL, boolean flag);
+    default void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL, boolean flag) {
+        updateVideoEncodedPath(videoID, encodedVideoPath, s3ThumbnailURL, null, null, flag);
+    }
 
     /**
      * Updates the encoded video path for a specific video (default flag true).
      */
-    void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL);
+    default void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL) {
+        updateVideoEncodedPath(videoID, encodedVideoPath, s3ThumbnailURL, null, null, true);
+    }
 
     /**
      * Retrieves the video information from video ID.

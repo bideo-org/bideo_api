@@ -31,6 +31,8 @@ public class VideoDTO implements Serializable {
     private String video_duration;
     private String iso_duration;
     private String thumbnail_url;
+    private String storyboard_url;
+    private String vtt_url;
     private VideoStatus videoStatus;
     private SeoMetadataDTO seo;
 }

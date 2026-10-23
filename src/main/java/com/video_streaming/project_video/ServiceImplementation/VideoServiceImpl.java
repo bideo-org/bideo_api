@@ -1,14 +1,18 @@
 package com.video_streaming.project_video.ServiceImplementation;
 
 import com.amazonaws.AmazonServiceException;
+import com.amazonaws.HttpMethod;
 import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3URI;
+import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.video_streaming.project_video.DTOMapper.VideoDTOMapper;
+import com.video_streaming.project_video.DTOs.CompletePresignedUploadDTO;
+import com.video_streaming.project_video.DTOs.PresignedUploadResponseDTO;
 import com.video_streaming.project_video.DTOs.UserDTO;
 import com.video_streaming.project_video.DTOs.VideoDTO;
 import com.video_streaming.project_video.DTOs.VideoMetadataUpdateRequest;
@@ -17,10 +21,12 @@ import com.video_streaming.project_video.Enums.VideoCategory;
 import com.video_streaming.project_video.Enums.VideoStatus;
 import com.video_streaming.project_video.Enums.VideoVisibility;
 import com.video_streaming.project_video.Repository.VideoRepository;
+import com.video_streaming.project_video.Service.SenderProcessService;
 import com.video_streaming.project_video.Service.UserService;
 import com.video_streaming.project_video.Service.VideoService;
 import com.video_streaming.project_video.Utils.SeoMetadataBuilder;
 import com.video_streaming.project_video.Utils.SlugUtils;
+import com.video_streaming.project_video.Utils.TranscodeProgressManager;
 
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -41,6 +47,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URL;
 import java.time.Duration;
 import java.util.*;
 
@@ -59,6 +66,8 @@ public class VideoServiceImpl implements VideoService {
     private final RedisTemplate<String, Long> viewsRedisTemplate;
     private final com.video_streaming.project_video.Service.ViewTrackingService viewTrackingService;
     private final com.video_streaming.project_video.Service.EngagementService engagementService;
+    private final SenderProcessService senderProcessService;
+    private final TranscodeProgressManager transcodeProgressManager;
 
     private static final Duration VIDEO_CACHE_TTL = Duration.ofMinutes(cacheTTLMinutesVideo);
     private static final Duration VIEWS_CACHE_TTL = Duration.ofMinutes(cacheTTLMinutesViews);
@@ -90,10 +99,61 @@ public class VideoServiceImpl implements VideoService {
     }
 
     @Override
+    public PresignedUploadResponseDTO generatePresignedUploadUrl(String fileName, String contentType, String userId) {
+        if (fileName == null || fileName.isBlank()) {
+            throw new IllegalArgumentException("File name cannot be empty");
+        }
+        String cleanFileName = fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+        String s3Key = "uploads/" + (userId != null && !userId.isBlank() ? userId : "anonymous") + "/" + UUID.randomUUID() + "_" + cleanFileName;
+
+        Date expiration = new Date(System.currentTimeMillis() + 60 * 60 * 1000L); // 1 hour expiration
+        GeneratePresignedUrlRequest generatePresignedUrlRequest = new GeneratePresignedUrlRequest(bucketName, s3Key)
+                .withMethod(HttpMethod.PUT)
+                .withExpiration(expiration);
+
+        if (contentType != null && !contentType.isBlank()) {
+            generatePresignedUrlRequest.setContentType(contentType);
+        }
+
+        URL presignedUrl = amazonS3.generatePresignedUrl(generatePresignedUrlRequest);
+        String publicS3Url = amazonS3.getUrl(bucketName, s3Key).toString();
+
+        return PresignedUploadResponseDTO.builder()
+                .uploadUrl(presignedUrl.toString())
+                .s3Key(s3Key)
+                .publicS3Url(publicS3Url)
+                .expiresInSeconds(3600)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public Long completePresignedUpload(CompletePresignedUploadDTO request, String userId) throws IOException {
+        if (request == null || request.getS3Key() == null || request.getS3Key().isBlank()) {
+            throw new IllegalArgumentException("S3 key is required to complete presigned upload");
+        }
+        String s3Url = amazonS3.getUrl(bucketName, request.getS3Key()).toString();
+
+        Long videoId = uploadVideoMetadata(
+                s3Url,
+                request.getVideoTitle(),
+                request.getDescription(),
+                request.getTags(),
+                request.getCategory(),
+                request.getVisibility(),
+                userId
+        );
+
+        transcodeProgressManager.updateProgress(videoId, "QUEUED", 5, "PROCESSING");
+        senderProcessService.sendVideoPath(s3Url, videoId);
+        return videoId;
+    }
+
+    @Override
     public String[] uploadDirectory(File directory, String fileNamePrefix) {
         if (directory == null || !directory.exists() || !directory.isDirectory()) {
             logger.error("File does not exist or is not a directory");
-            return new String[]{"Error: File is not a directory - ", (directory != null ? directory.getAbsolutePath() : "null")};
+            return new String[]{"Error: File is not a directory - ", (directory != null ? directory.getAbsolutePath() : "null"), null, null};
         }
         File[] files = directory.listFiles();
         if (files == null || files.length == 0) {
@@ -102,6 +162,8 @@ public class VideoServiceImpl implements VideoService {
 
         String s3FileURL = null;
         String s3ThumbnailURL = null;
+        String s3StoryboardURL = null;
+        String s3VttURL = null;
 
         for (File file : files) {
             String filenameString = fileNamePrefix + "/" + file.getName();
@@ -110,18 +172,28 @@ public class VideoServiceImpl implements VideoService {
             amazonS3.putObject(request);
 
             if (file.getName().endsWith(".m3u8")) {
-                s3FileURL = amazonS3.getUrl(bucketName, filenameString).toString();
+                if ("master.m3u8".equalsIgnoreCase(file.getName()) || s3FileURL == null) {
+                    s3FileURL = amazonS3.getUrl(bucketName, filenameString).toString();
+                }
             }
 
-            if (file.getName().endsWith(".webp")) {
+            if (file.getName().endsWith(".webp") && !file.getName().toLowerCase().contains("storyboard")) {
                 s3ThumbnailURL = amazonS3.getUrl(bucketName, filenameString).toString();
+            }
+
+            if (file.getName().toLowerCase().contains("storyboard") && file.getName().endsWith(".webp")) {
+                s3StoryboardURL = amazonS3.getUrl(bucketName, filenameString).toString();
+            }
+
+            if (file.getName().endsWith(".vtt")) {
+                s3VttURL = amazonS3.getUrl(bucketName, filenameString).toString();
             }
         }
 
         if (s3FileURL == null) {
             throw new RuntimeException(".m3u8 file not found in directory: " + directory.getAbsolutePath());
         }
-        return new String[]{ s3FileURL, s3ThumbnailURL };
+        return new String[]{ s3FileURL, s3ThumbnailURL, s3StoryboardURL, s3VttURL };
     }
 
     @Override
@@ -192,12 +264,14 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     @Transactional
-    public void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL, boolean flag) {
+    public void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL, String s3StoryboardURL, String s3VttURL, boolean flag) {
         Video video = videoRepository.findById(videoID)
                 .orElseThrow(() -> new RuntimeException("Video not found with id: " + videoID));
         if (flag) {
             video.setM3u8Url(encodedVideoPath);
             video.setThumbnail_url(s3ThumbnailURL);
+            if (s3StoryboardURL != null) video.setStoryboard_url(s3StoryboardURL);
+            if (s3VttURL != null) video.setVtt_url(s3VttURL);
             video.setVideoStatus(VideoStatus.COMPLETED);
         } else {
             video.setVideoStatus(VideoStatus.FAILED);
@@ -208,8 +282,14 @@ public class VideoServiceImpl implements VideoService {
 
     @Override
     @Transactional
+    public void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL, boolean flag) {
+        updateVideoEncodedPath(videoID, encodedVideoPath, s3ThumbnailURL, null, null, flag);
+    }
+
+    @Override
+    @Transactional
     public void updateVideoEncodedPath(Long videoID, String encodedVideoPath, String s3ThumbnailURL) {
-        updateVideoEncodedPath(videoID, encodedVideoPath, s3ThumbnailURL, true);
+        updateVideoEncodedPath(videoID, encodedVideoPath, s3ThumbnailURL, null, null, true);
     }
 
     @Override

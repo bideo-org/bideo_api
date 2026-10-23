@@ -401,3 +401,127 @@ export const UserHandleBadge: React.FC<{ user?: UserDTO }> = ({ user }) => {
 - [x] **Profile / Settings Page**: Let creators edit their `fullName` freely, while validating new `username` changes.
 - [x] **Video & Comment Headers**: Display `user.fullName` as the primary title and `user.username` (`@handle`) as the secondary sub-badge.
 - [x] **Channel Routing**: Route channels via `/channel/@${username}` (the backend resolves both `@username` and Firebase UIDs in `/api/user/getUser/{id}`).
+
+---
+
+## 7. Phase 4: Direct-to-S3 Uploads, ABR Streaming & Scrubbing Spritesheets
+
+### 1. Direct-to-S3 Presigned Upload (Bypasses 40MB Multipart Limit)
+Upload multi-gigabyte 4K/1080p video files directly from browser to AWS S3 using secure presigned PUT URLs:
+
+#### Step 1: Request S3 Presigned URL
+- **Endpoint**: `POST /api/vid/upload/presigned` (requires auth)
+- **Request Body**:
+```json
+{
+  "fileName": "japan_travel_4k.mp4",
+  "contentType": "video/mp4"
+}
+```
+- **Response**:
+```json
+{
+  "uploadUrl": "https://bideo-bucket.s3.amazonaws.com/uploads/user_123/uuid_japan_travel_4k.mp4?X-Amz-Algorithm=...",
+  "s3Key": "uploads/user_123/uuid_japan_travel_4k.mp4",
+  "publicS3Url": "https://bideo-bucket.s3.amazonaws.com/uploads/user_123/uuid_japan_travel_4k.mp4",
+  "expiresInSeconds": 3600
+}
+```
+
+#### Step 2: PUT Video Directly from Browser to S3
+Use standard `fetch` or `axios` with an `onUploadProgress` handler:
+```typescript
+await axios.put(uploadUrl, file, {
+  headers: { 'Content-Type': file.type },
+  onUploadProgress: (progressEvent) => {
+    const percent = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+    setUploadProgress(percent);
+  }
+});
+```
+
+#### Step 3: Complete Presigned Upload & Queue Transcoding
+- **Endpoint**: `POST /api/vid/upload/complete-presigned` (requires auth)
+- **Request Body**:
+```json
+{
+  "s3Key": "uploads/user_123/uuid_japan_travel_4k.mp4",
+  "videoTitle": "Tokyo at Night 4K HDR",
+  "description": "Cinematic walking tour through Shinjuku.",
+  "tags": ["travel", "japan", "4k"],
+  "category": "TRAVEL",
+  "visibility": "PUBLIC"
+}
+```
+- **Response**:
+```json
+{
+  "videoId": 101,
+  "message": "Presigned upload completed and queued for multi-rendition transcoding"
+}
+```
+
+---
+
+### 2. Real-Time Transcoding Progress via Server-Sent Events (SSE)
+Subscribe to live FFmpeg transcoding updates:
+- **Endpoint**: `GET /api/vid/{videoId}/transcode-progress`
+- **Format**: `text/event-stream`
+- **Events**:
+```json
+{
+  "videoId": 101,
+  "stage": "ENCODING_ABR_HLS",
+  "percent": 50,
+  "status": "PROCESSING"
+}
+```
+Stages emitted: `PREPARING (10%)` $\rightarrow$ `ENCODING_BASE (25%)` $\rightarrow$ `ENCODING_ABR_HLS (50%)` $\rightarrow$ `GENERATING_STORYBOARD (75%)` $\rightarrow$ `UPLOADING_S3 (88%)` $\rightarrow$ `COMPLETED (100%)`.
+
+#### React Hook Example:
+```typescript
+export function useTranscodeProgress(videoId: number | null) {
+  const [progress, setProgress] = useState<{ stage: string; percent: number; status: string } | null>(null);
+
+  useEffect(() => {
+    if (!videoId) return;
+    const eventSource = new EventSource(`/api/vid/${videoId}/transcode-progress`);
+    eventSource.addEventListener('progress', (e) => {
+      const data = JSON.parse(e.data);
+      setProgress(data);
+      if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+        eventSource.close();
+      }
+    });
+    return () => eventSource.close();
+  }, [videoId]);
+
+  return progress;
+}
+```
+
+---
+
+### 3. Multi-Rendition Adaptive Bitrate (ABR) HLS
+The transcoder generates an HLS ladder with `master.m3u8` containing:
+- `720p` (1280x720 @ 2500kbps)
+- `480p` (854x480 @ 1200kbps)
+- `360p` (640x360 @ 600kbps)
+
+Pass `video.m3u8Url` directly into `hls.js` or standard video player; the player automatically shifts bitrate based on user connection speed.
+
+---
+
+### 4. Hover Scrubbing Thumbnails (WebVTT + Spritesheet)
+Each completed video includes:
+- `storyboard_url`: Single WebP spritesheet (5x5 grid, 160x90 per thumbnail).
+- `vtt_url`: WebVTT cue file mapping time segments to `#xywh=` sprite coordinates.
+
+#### Video.js / Plyr Integration:
+```javascript
+// Video.js vtt-thumbnails plugin:
+player.vttThumbnails({
+  src: video.vtt_url
+});
+```
+

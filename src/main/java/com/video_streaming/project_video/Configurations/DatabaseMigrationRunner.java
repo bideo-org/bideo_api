@@ -35,6 +35,8 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         executeSafe("vid_metadata iso_duration column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS iso_duration VARCHAR(50);");
         executeSafe("vid_metadata likes_count column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS likes_count BIGINT DEFAULT 0;");
         executeSafe("vid_metadata dislikes_count column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS dislikes_count BIGINT DEFAULT 0;");
+        executeSafe("vid_metadata storyboard_url column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS storyboard_url VARCHAR(500);");
+        executeSafe("vid_metadata vtt_url column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS vtt_url VARCHAR(500);");
 
         // 3. Backfill video metadata defaults
         executeSafe("vid_metadata visibility backfill", "UPDATE vid_metadata SET visibility = 'PUBLIC' WHERE visibility IS NULL;");
