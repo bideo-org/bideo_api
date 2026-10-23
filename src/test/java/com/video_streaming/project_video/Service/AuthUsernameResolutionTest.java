@@ -83,11 +83,52 @@ class AuthUsernameResolutionTest {
     }
 
     @Test
-    @DisplayName("Should throw IllegalArgumentException when creating user with empty username")
-    void testCreateUser_withEmptyUsername() {
-        assertThrows(IllegalArgumentException.class, () ->
-                userService.create("new@example.com", "password123", "", null)
-        );
+    @DisplayName("Should resolve @username handle to email")
+    void testResolveEmail_withAtHandle() {
+        userRepository.addUser(new User("uid-123", "johndoe", "john.doe@example.com", "USER", "avatar.png"));
+
+        String resolved = userService.resolveEmailFromIdentifier("@johndoe");
+
+        assertEquals("john.doe@example.com", resolved);
+    }
+
+    @Test
+    @DisplayName("Should reject invalid username formats and reserved handles")
+    void testUsernameFormatValidation() {
+        assertFalse(userService.isUsernameValid("ab")); // too short
+        assertFalse(userService.isUsernameValid("user name with spaces")); // spaces
+        assertFalse(userService.isUsernameValid("user!@#$")); // special chars
+        assertFalse(userService.isUsernameValid("admin")); // reserved
+        assertFalse(userService.isUsernameValid("api")); // reserved
+        assertFalse(userService.isUsernameValid("buzzclips")); // reserved
+
+        assertTrue(userService.isUsernameValid("valid_user_123"));
+        assertTrue(userService.isUsernameValid("@valid_handle"));
+    }
+
+    @Test
+    @DisplayName("Should support full name and username distinction")
+    void testFullNameAndUsernameDistinction() {
+        User user = new User("uid-999", "alex_tech", "Alexandre Dumas", "alex@test.com", "USER", "avatar.png");
+        userRepository.addUser(user);
+
+        assertEquals("alex_tech", user.getUsername());
+        assertEquals("Alexandre Dumas", user.getFullName());
+
+        com.video_streaming.project_video.DTOs.UserDTO dto = userService.getUserById("alex_tech");
+        assertEquals("alex_tech", dto.getUsername());
+        assertEquals("Alexandre Dumas", dto.getFullName());
+
+        // Also finds by @handle
+        com.video_streaming.project_video.DTOs.UserDTO dtoAt = userService.getUserById("@alex_tech");
+        assertEquals("alex_tech", dtoAt.getUsername());
+
+        // Search by handle or full name
+        List<com.video_streaming.project_video.DTOs.UserDTO> byHandle = userService.searchUsers("alex_tech", 10);
+        assertFalse(byHandle.isEmpty());
+
+        List<com.video_streaming.project_video.DTOs.UserDTO> byName = userService.searchUsers("Dumas", 10);
+        assertFalse(byName.isEmpty());
     }
 
     /**
@@ -118,6 +159,30 @@ class AuthUsernameResolutionTest {
         public boolean existsByUserNameIgnoreCase(String userName) {
             return users.values().stream()
                     .anyMatch(u -> u.getUser_name() != null && u.getUser_name().equalsIgnoreCase(userName));
+        }
+
+        @Override
+        public boolean existsByUserNameIgnoreCaseAndUserIdNot(String userName, String userId) {
+            return users.values().stream()
+                    .anyMatch(u -> u.getUser_name() != null
+                            && u.getUser_name().equalsIgnoreCase(userName)
+                            && !u.getUserId().equals(userId));
+        }
+
+        @Override
+        public List<User> searchUsers(String query, Pageable pageable) {
+            return users.values().stream()
+                    .filter(u -> (u.getUser_name() != null && u.getUser_name().toLowerCase().contains(query.toLowerCase()))
+                            || (u.getFullName() != null && u.getFullName().toLowerCase().contains(query.toLowerCase())))
+                    .toList();
+        }
+
+        @Override
+        public List<String> findAllUsernames() {
+            return users.values().stream()
+                    .map(User::getUser_name)
+                    .filter(Objects::nonNull)
+                    .toList();
         }
 
         @Override

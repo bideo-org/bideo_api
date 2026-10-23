@@ -2,18 +2,28 @@ package com.video_streaming.project_video.Service;
 
 import com.video_streaming.project_video.DTOs.UserDTO;
 
+import java.util.List;
+
 public interface UserService {
     
     /**
-     * This method is used to create a new user with the provided email, password, and username.
-     * 
-     * @param emailId The email ID of the user.
-     * @param password The password for the user.
-     * @param user_name The username for the user.
-     * @param avatar_url The avatar url for the user.
-     * @throws Exception If there is an error during user creation.
+     * Legacy method to create a new user with user_name as both handle and display name.
      */
     void create(String emailId, String password, String user_name, String avatar_url) throws Exception;
+
+    /**
+     * Production-grade user creation with distinct username (handle) and fullName (display name).
+     *
+     * @param emailId The email ID of the user.
+     * @param password The password for the user.
+     * @param username The unique handle for the user (e.g., "johndoe").
+     * @param fullName The display / real name of the user (e.g., "John Doe").
+     * @param avatar_url The avatar URL for the user.
+     * @throws Exception If validation or Firebase creation fails.
+     */
+    default void create(String emailId, String password, String username, String fullName, String avatar_url) throws Exception {
+        create(emailId, password, username, avatar_url);
+    }
 
     /**
      * This method is used to update the user profile with the provided UserDTO.
@@ -24,26 +34,41 @@ public interface UserService {
     String updateUserProfile(UserDTO userDTO);
 
     /**
-     * This method retrieves a user by their user ID.
+     * This method retrieves a user by their user ID or username handle.
      * 
-     * @param userId The ID of the user to retrieve.
+     * @param userId The ID or username of the user to retrieve.
      * @return UserDTO containing user details.
      */
     UserDTO getUserById(String userId);
 
     /**
-     * Resolves the user's email from their identifier (which may be a username or an email).
+     * Resolves the user's email from their identifier (which may be a username, @handle, or email).
      *
-     * @param identifier The username or email entered by the user.
+     * @param identifier The username, @handle, or email entered by the user.
      * @return The resolved email address.
      */
     String resolveEmailFromIdentifier(String identifier);
 
     /**
-     * Checks if a given username is available (not already taken).
+     * Checks if a given username is available (not already taken and valid).
      *
      * @param username The username to check.
-     * @return true if available, false if already taken.
+     * @return true if available, false if already taken or invalid.
      */
     boolean isUsernameAvailable(String username);
+
+    default boolean isUsernameValid(String username) {
+        return username != null && !username.isBlank();
+    }
+
+    /**
+     * Searches users / creators by handle or full display name.
+     *
+     * @param query Search query text.
+     * @param limit Max results to return.
+     * @return List of matching UserDTOs.
+     */
+    default List<UserDTO> searchUsers(String query, int limit) {
+        return java.util.Collections.emptyList();
+    }
 }

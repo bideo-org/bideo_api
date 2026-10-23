@@ -20,6 +20,7 @@ public class WatchProgressDTO implements Serializable {
     private String slug;
     private String thumbnailUrl;
     private String channelName;
+    private String channelHandle;
     private String channelAvatar;
     private Double progressSeconds;
     private Double durationSeconds;

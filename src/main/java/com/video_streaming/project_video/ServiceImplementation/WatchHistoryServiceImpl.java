@@ -114,9 +114,11 @@ public class WatchHistoryServiceImpl implements WatchHistoryService {
     private WatchProgressDTO toDTO(WatchHistory history) {
         Video video = history.getVideo();
         String channelName = null;
+        String channelHandle = null;
         String channelAvatar = null;
         if (video.getVideo_uploader() != null) {
-            channelName = video.getVideo_uploader().getUser_name();
+            channelName = video.getVideo_uploader().getFullName();
+            channelHandle = video.getVideo_uploader().getUsername();
             channelAvatar = video.getVideo_uploader().getAvatar_url();
         }
 
@@ -126,6 +128,7 @@ public class WatchHistoryServiceImpl implements WatchHistoryService {
                 .slug(video.getSlug())
                 .thumbnailUrl(video.getThumbnail_url())
                 .channelName(channelName)
+                .channelHandle(channelHandle)
                 .channelAvatar(channelAvatar)
                 .progressSeconds(history.getProgressSeconds())
                 .durationSeconds(history.getDurationSeconds())

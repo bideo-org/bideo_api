@@ -18,14 +18,21 @@ public class UserController {
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
     private final UserService userService;
 
-    @RequestMapping(value = "/update", method = RequestMethod.POST, consumes = { "multipart/form-data" })
-    public ResponseEntity<String> updateUser(@ModelAttribute UserDTO userDTO) {
+    @PostMapping(value = "/update")
+    public ResponseEntity<String> updateUser(
+            @RequestBody(required = false) UserDTO bodyDTO,
+            @ModelAttribute UserDTO formDTO
+    ) {
         try {
-            String response = userService.updateUserProfile(userDTO);
-            logger.info(response);
+            UserDTO targetDTO = (bodyDTO != null && bodyDTO.getUserId() != null) ? bodyDTO : formDTO;
+            String response = userService.updateUserProfile(targetDTO);
+            logger.info("Updated profile for user: {}", targetDTO.getUserId());
             return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            logger.warn("Validation error updating user: {}", e.getMessage());
+            return ResponseEntity.status(400).body("Validation error: " + e.getMessage());
         } catch (Exception e) {
-            logger.error(e.getMessage());
+            logger.error("Error updating user: {}", e.getMessage());
             return ResponseEntity.status(500).body("Error updating user: " + e.getMessage());
         }
     }
@@ -38,5 +45,13 @@ public class UserController {
         } catch (Exception e) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND).body(e.getMessage());
         }
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<java.util.List<UserDTO>> searchUsers(
+            @RequestParam("q") String query,
+            @RequestParam(value = "limit", defaultValue = "10") int limit
+    ) {
+        return ResponseEntity.ok(userService.searchUsers(query, limit));
     }
 }

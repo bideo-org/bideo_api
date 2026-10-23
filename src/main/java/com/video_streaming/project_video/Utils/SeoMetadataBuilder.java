@@ -65,7 +65,10 @@ public class SeoMetadataBuilder {
         if (video.getVideo_uploader() != null) {
             Map<String, Object> author = new LinkedHashMap<>();
             author.put("@type", "Person");
-            author.put("name", video.getVideo_uploader().getUser_name() != null ? video.getVideo_uploader().getUser_name() : "Creator");
+            author.put("name", video.getVideo_uploader().getFullName() != null ? video.getVideo_uploader().getFullName() : "Creator");
+            if (video.getVideo_uploader().getUsername() != null) {
+                author.put("url", BASE_URL + "/channel/@" + video.getVideo_uploader().getUsername());
+            }
             jsonLd.put("author", author);
         }
 

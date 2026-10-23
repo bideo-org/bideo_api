@@ -39,14 +39,26 @@ public class AuthController {
     }
 
     @PostMapping("/createUser")
-    public ResponseEntity<String> createUser(@RequestParam String email, @RequestParam String password,
-                                             @RequestParam String user_name, @RequestParam String avatar_url) {
+    public ResponseEntity<String> createUser(
+            @RequestParam String email,
+            @RequestParam String password,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "user_name", required = false) String user_name,
+            @RequestParam(value = "fullName", required = false) String fullName,
+            @RequestParam(value = "full_name", required = false) String full_name,
+            @RequestParam(value = "avatar_url", required = false) String avatar_url
+    ) {
         try {
-            userService.create(email, password, user_name, avatar_url);
-            logger.info("Successfully created user");
+            String finalUsername = (username != null && !username.isBlank()) ? username : user_name;
+            String finalFullName = (fullName != null && !fullName.isBlank()) ? fullName : full_name;
+            if (finalUsername == null || finalUsername.isBlank()) {
+                return ResponseEntity.status(400).body("Error creating user: Username is required");
+            }
+            userService.create(email, password, finalUsername, finalFullName, avatar_url);
+            logger.info("Successfully created user: {}", finalUsername);
             return ResponseEntity.ok("User created successfully!");
         } catch (Exception e) {
-            logger.error(e.getMessage());
+            logger.error("Error creating user: {}", e.getMessage());
             return ResponseEntity.status(400).body("Error creating user: " + e.getMessage());
         }
     }
@@ -99,8 +111,9 @@ public class AuthController {
 
     @GetMapping("/check-username")
     public ResponseEntity<Map<String, Boolean>> checkUsername(@RequestParam String username) {
+        boolean valid = userService.isUsernameValid(username);
         boolean available = userService.isUsernameAvailable(username);
-        return ResponseEntity.ok(Map.of("available", available));
+        return ResponseEntity.ok(Map.of("available", available, "valid", valid));
     }
 
     @PostMapping("/refresh-token")
