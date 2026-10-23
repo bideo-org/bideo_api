@@ -37,10 +37,12 @@ public class UsernameBloomFilter {
     private final BitSet localBitSet = new BitSet(BIT_SIZE);
     private final StringRedisTemplate stringRedisTemplate;
     private final UserRepository userRepository;
+    private final java.util.concurrent.atomic.AtomicBoolean warmedUp = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public UsernameBloomFilter() {
         this.stringRedisTemplate = null;
         this.userRepository = null;
+        this.warmedUp.set(true); // Standalone instance with no repository is immediately ready
     }
 
     @Autowired(required = false)
@@ -54,11 +56,20 @@ public class UsernameBloomFilter {
         warmUp();
     }
 
+    public boolean isWarmedUp() {
+        return warmedUp.get();
+    }
+
+    public void setWarmedUp(boolean isWarmedUp) {
+        this.warmedUp.set(isWarmedUp);
+    }
+
     /**
      * Pre-populates the Bloom filter with existing usernames from the repository.
      */
     public synchronized void warmUp() {
         if (userRepository == null) {
+            warmedUp.set(true);
             return;
         }
         try {
@@ -71,6 +82,7 @@ public class UsernameBloomFilter {
                 }
                 logger.info("Username Bloom filter successfully warmed up with {} usernames", usernames.size());
             }
+            warmedUp.set(true);
         } catch (Exception e) {
             logger.warn("Bloom filter pre-warm notice (tables may be pending migration): {}", e.getMessage());
         }
@@ -114,6 +126,10 @@ public class UsernameBloomFilter {
     public boolean mightContain(String username) {
         if (username == null || username.isBlank()) {
             return false;
+        }
+        if (!warmedUp.get()) {
+            // Filter is uninitialized or not yet warmed up from DB: fall through to database check
+            return true;
         }
         String clean = normalize(username);
         int[] indices = getBitIndices(clean);

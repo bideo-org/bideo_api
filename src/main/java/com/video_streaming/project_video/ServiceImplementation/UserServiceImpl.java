@@ -50,7 +50,7 @@ public class UserServiceImpl implements UserService {
     public UserServiceImpl(FirebaseAuth firebaseAuth, UserRepository userRepository) {
         this.firebaseAuth = firebaseAuth;
         this.userRepository = userRepository;
-        this.usernameBloomFilter = new com.video_streaming.project_video.Utils.UsernameBloomFilter();
+        this.usernameBloomFilter = new com.video_streaming.project_video.Utils.UsernameBloomFilter(null, userRepository);
     }
 
     // Full 3-argument constructor for Spring dependency injection
@@ -64,7 +64,11 @@ public class UserServiceImpl implements UserService {
         this.userRepository = userRepository;
         this.usernameBloomFilter = usernameBloomFilter != null
                 ? usernameBloomFilter
-                : new com.video_streaming.project_video.Utils.UsernameBloomFilter();
+                : new com.video_streaming.project_video.Utils.UsernameBloomFilter(null, userRepository);
+    }
+
+    public com.video_streaming.project_video.Utils.UsernameBloomFilter getUsernameBloomFilter() {
+        return usernameBloomFilter;
     }
 
     public static String sanitizeUsername(String input) {
