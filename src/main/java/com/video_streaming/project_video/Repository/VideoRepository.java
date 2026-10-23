@@ -85,4 +85,42 @@ public interface VideoRepository extends JpaRepository<Video, Long>, JpaSpecific
 
     @Query("SELECT v FROM Video v WHERE v.video_uploader.userId IN :channelUserIds AND (v.visibility = 'PUBLIC' OR v.visibility IS NULL) AND (v.videoStatus = 'COMPLETED' OR v.videoStatus IS NULL) ORDER BY v.videoId DESC")
     Page<Video> findSubscriptionFeed(@Param("channelUserIds") java.util.List<String> channelUserIds, Pageable pageable);
+
+    @Query("SELECT v FROM Video v WHERE v.videoId != :currentVideoId " +
+           "AND (v.visibility = 'PUBLIC' OR v.visibility IS NULL) " +
+           "AND (v.videoStatus = 'COMPLETED' OR v.videoStatus IS NULL) " +
+           "AND (v.category = :category OR (v.video_uploader IS NOT NULL AND v.video_uploader.userId = :uploaderId)) " +
+           "ORDER BY v.videoId DESC")
+    Page<Video> findRelatedByCategoryOrUploader(
+            @Param("currentVideoId") Long currentVideoId,
+            @Param("category") VideoCategory category,
+            @Param("uploaderId") String uploaderId,
+            Pageable pageable
+    );
+
+    @Query("SELECT DISTINCT v FROM Video v JOIN v.tags t WHERE v.videoId != :currentVideoId " +
+           "AND (v.visibility = 'PUBLIC' OR v.visibility IS NULL) " +
+           "AND (v.videoStatus = 'COMPLETED' OR v.videoStatus IS NULL) " +
+           "AND LOWER(t) IN :tags " +
+           "ORDER BY v.videoId DESC")
+    Page<Video> findRelatedByTags(
+            @Param("currentVideoId") Long currentVideoId,
+            @Param("tags") java.util.List<String> tags,
+            Pageable pageable
+    );
+
+    @Query("SELECT v FROM Video v WHERE (v.visibility = 'PUBLIC' OR v.visibility IS NULL) " +
+           "AND (v.videoStatus = 'COMPLETED' OR v.videoStatus IS NULL) " +
+           "ORDER BY v.video_views DESC, v.likesCount DESC, v.videoId DESC")
+    Page<Video> findPopularVideos(Pageable pageable);
+
+    @Query("SELECT DISTINCT v.video_title FROM Video v WHERE (v.visibility = 'PUBLIC' OR v.visibility IS NULL) " +
+           "AND (v.videoStatus = 'COMPLETED' OR v.videoStatus IS NULL) " +
+           "AND LOWER(v.video_title) LIKE LOWER(CONCAT(:prefix, '%'))")
+    java.util.List<String> findTitleSuggestions(@Param("prefix") String prefix, Pageable pageable);
+
+    @Query("SELECT DISTINCT t FROM Video v JOIN v.tags t WHERE (v.visibility = 'PUBLIC' OR v.visibility IS NULL) " +
+           "AND (v.videoStatus = 'COMPLETED' OR v.videoStatus IS NULL) " +
+           "AND LOWER(t) LIKE LOWER(CONCAT(:prefix, '%'))")
+    java.util.List<String> findTagSuggestions(@Param("prefix") String prefix, Pageable pageable);
 }

@@ -652,4 +652,91 @@ export const SubscribeButton: React.FC<SubscribeButtonProps> = ({ channelId, tok
 }
 ```
 
+---
+
+## 14. Discovery, Trending & Search Autocomplete
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/vid/{videoId}/related?page=0&size=10` | "Up Next" / Related videos scored by tag overlap, category, and creator |
+| `GET` | `/api/vid/trending?page=0&size=20` | Dynamic velocity-decay trending feed |
+| `GET` | `/api/vid/search/suggest?q={prefix}&limit=8` | Sub-5ms instant autocomplete suggestions for search bar |
+
+### Search Autocomplete Dropdown Component (`SearchAutocomplete.tsx`)
+
+```tsx
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+
+interface SearchAutocompleteProps {
+  onSelectSuggestion: (query: string) => void;
+}
+
+export const SearchAutocomplete: React.FC<SearchAutocompleteProps> = ({ onSelectSuggestion }) => {
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
+
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    debounceTimer.current = setTimeout(async () => {
+      try {
+        const res = await axios.get<string[]>(`/api/vid/search/suggest`, {
+          params: { q: query.trim(), limit: 6 }
+        });
+        setSuggestions(res.data);
+        setIsOpen(res.data.length > 0);
+      } catch (err) {
+        console.error("Autocomplete error:", err);
+      }
+    }, 150);
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [query]);
+
+  return (
+    <div className="relative w-full max-w-lg">
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search BuzzClips..."
+        className="w-full px-4 py-2 bg-neutral-900 text-white rounded-full border border-neutral-700 focus:outline-none focus:border-blue-500"
+      />
+      {isOpen && (
+        <ul className="absolute z-50 left-0 right-0 mt-2 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-xl overflow-hidden">
+          {suggestions.map((item, idx) => (
+            <li
+              key={idx}
+              onClick={() => {
+                setQuery(item);
+                setIsOpen(false);
+                onSelectSuggestion(item);
+              }}
+              className="px-4 py-2.5 text-neutral-200 hover:bg-neutral-800 cursor-pointer flex items-center gap-2"
+            >
+              <span className="text-neutral-500 text-sm">🔍</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+```
+
+
 
