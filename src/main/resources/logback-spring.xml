@@ -26,8 +26,7 @@
 
     <root level="INFO">
         <appender-ref ref="RollingFile" />
-        <!--Uncomment the line below for development mode -->
-        <!-- <appender-ref ref="Console" />-->
+        <appender-ref ref="Console" />
     </root>
 
 </configuration>
