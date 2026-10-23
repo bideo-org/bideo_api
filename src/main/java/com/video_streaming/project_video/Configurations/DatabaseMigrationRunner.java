@@ -140,5 +140,4 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             logger.warn("Migration notice [{}]: {}", label, e.getMessage());
         }
     }
-    }
 }
