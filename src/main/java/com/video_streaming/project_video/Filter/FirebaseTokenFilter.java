@@ -46,11 +46,23 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
         boolean isWhitelisted = WHITELISTED_PATHS.stream()
                 .anyMatch(whitelistPattern -> pathMatcher.match(whitelistPattern, path));
 
+        String idToken = null;
         String authHeader = request.getHeader("Authorization");
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String idToken = authHeader.replace("Bearer ", "").trim();
+            idToken = authHeader.replace("Bearer ", "").trim();
+        } else if (request.getCookies() != null) {
+            for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
+                if ("token".equalsIgnoreCase(cookie.getName()) || "firebaseToken".equalsIgnoreCase(cookie.getName()) || "idToken".equalsIgnoreCase(cookie.getName())) {
+                    if (cookie.getValue() != null && !cookie.getValue().isBlank()) {
+                        idToken = cookie.getValue().trim();
+                        break;
+                    }
+                }
+            }
+        }
 
+        if (idToken != null && !idToken.isBlank()) {
             try {
                 FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(idToken);
                 String uid = decodedToken.getUid();
@@ -70,9 +82,9 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
                 }
             }
         } else if (!isWhitelisted) {
-            logger.error("Authorization header not found or invalid for secured path: {}", path);
+            logger.error("Authentication token not found in Authorization header or cookie for secured path: {}", path);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.getWriter().write("Missing or invalid Authorization header");
+            response.getWriter().write("Missing or invalid Authorization header or token cookie");
             return;
         }
 

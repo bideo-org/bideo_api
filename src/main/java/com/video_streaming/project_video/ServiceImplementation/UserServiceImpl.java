@@ -163,8 +163,11 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("User ID is required to update profile");
         }
 
-        User user = userRepository.findById(userDTO.getUserId().trim())
-                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userDTO.getUserId()));
+        Optional<User> userOpt = userRepository.findById(userDTO.getUserId().trim());
+        if (userOpt.isEmpty()) {
+            userOpt = userRepository.findFirstByUserNameIgnoreCase(sanitizeUsername(userDTO.getUserId()));
+        }
+        User user = userOpt.orElseThrow(() -> new RuntimeException("User not found with ID or username: " + userDTO.getUserId()));
 
         // 1. Update Full Name / Channel Display Name
         String newFullName = userDTO.getFullName() != null ? userDTO.getFullName() : userDTO.getFull_name();
@@ -191,13 +194,15 @@ public class UserServiceImpl implements UserService {
         }
 
         // 3. Update Email
-        if (userDTO.getUser_email() != null && !userDTO.getUser_email().isBlank()) {
-            user.setUser_email(userDTO.getUser_email().trim());
+        String newEmail = userDTO.getUser_email() != null ? userDTO.getUser_email() : userDTO.getEmail();
+        if (newEmail != null && !newEmail.isBlank()) {
+            user.setUser_email(newEmail.trim());
         }
 
         // 4. Update Avatar URL
-        if (userDTO.getAvatar_url() != null && !userDTO.getAvatar_url().isBlank()) {
-            user.setAvatar_url(userDTO.getAvatar_url().trim());
+        String newAvatar = userDTO.getAvatar_url() != null ? userDTO.getAvatar_url() : userDTO.getAvatarUrl();
+        if (newAvatar != null && !newAvatar.isBlank()) {
+            user.setAvatar_url(newAvatar.trim());
         }
 
         userRepository.save(user);

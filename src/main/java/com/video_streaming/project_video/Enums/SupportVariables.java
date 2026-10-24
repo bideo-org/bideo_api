@@ -18,10 +18,16 @@ public interface SupportVariables {
             "/api/vid/trending",
             "/api/vid/search/suggest",
             "/api/vid/*/related",
+            "/api/vid/*/transcode-progress",
             "/api/channel/*/status",
             "/api/channel/*/subscribers",
             "/api/playlists/*",
-            "/api/creator/*/analytics"
+            "/api/creator/*/analytics",
+            "/swagger-ui/**",
+            "/swagger-ui.html",
+            "/v3/api-docs/**",
+            "/swagger-resources/**",
+            "/webjars/**"
             );
 
     List<String> ALLOWED_ORIGINS = List.of(

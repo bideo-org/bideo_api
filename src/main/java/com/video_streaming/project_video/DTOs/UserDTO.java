@@ -17,10 +17,12 @@ import java.io.Serializable;
 public class UserDTO implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    @JsonProperty("userId")
+    @JsonAlias({"id", "uid", "user_id"})
     private String userId;
 
     @JsonProperty("username")
-    @JsonAlias({"user_name", "userName"})
+    @JsonAlias({"user_name", "userName", "handle"})
     private String username;
 
     @JsonProperty("user_name")
@@ -38,18 +40,36 @@ public class UserDTO implements Serializable {
 
     @JsonProperty("full_name")
     public String getFull_name() {
-        return (fullName != null && !fullName.isBlank()) ? fullName : username;
+        return fullName;
     }
 
     public void setFull_name(String full_name) {
         this.fullName = full_name;
     }
 
-    @JsonAlias({"email"})
+    @JsonProperty("user_email")
+    @JsonAlias({"email", "userEmail"})
     private String user_email;
 
+    public String getEmail() {
+        return user_email;
+    }
+
+    public void setEmail(String email) {
+        this.user_email = email;
+    }
+
+    @JsonProperty("avatar_url")
     @JsonAlias({"avatarUrl", "avatar"})
     private String avatar_url;
+
+    public String getAvatarUrl() {
+        return avatar_url;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatar_url = avatarUrl;
+    }
 
     private String user_role;
 }

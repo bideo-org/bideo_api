@@ -18,22 +18,107 @@ public class UserController {
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
     private final UserService userService;
 
-    @PostMapping(value = "/update")
-    public ResponseEntity<String> updateUser(
+    /**
+     * Handles JSON updates: application/json
+     */
+    @RequestMapping(
+            value = {"/update", "", "/updateProfile", "/{id}", "/update/{id}"},
+            method = {RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH},
+            consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE
+    )
+    public ResponseEntity<String> updateUserJson(
             @RequestBody(required = false) UserDTO bodyDTO,
-            @ModelAttribute UserDTO formDTO
+            @PathVariable(value = "id", required = false) String pathId,
+            @RequestParam(value = "userId", required = false) String queryUserId
     ) {
+        return processUpdateUser(bodyDTO, pathId, queryUserId);
+    }
+
+    /**
+     * Handles multipart/form-data and form-urlencoded updates (e.g., FormData sent from browser)
+     */
+    @RequestMapping(
+            value = {"/update", "", "/updateProfile", "/{id}", "/update/{id}"},
+            method = {RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH},
+            consumes = {org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE, org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED_VALUE}
+    )
+    public ResponseEntity<String> updateUserFormData(
+            @ModelAttribute UserDTO formDTO,
+            @PathVariable(value = "id", required = false) String pathId,
+            @RequestParam(value = "userId", required = false) String queryUserId
+    ) {
+        return processUpdateUser(formDTO, pathId, queryUserId);
+    }
+
+    /**
+     * Fallback for requests without explicit Content-Type header
+     */
+    @RequestMapping(
+            value = {"/update", "", "/updateProfile", "/{id}", "/update/{id}"},
+            method = {RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH}
+    )
+    public ResponseEntity<String> updateUserFallback(
+            @ModelAttribute UserDTO formDTO,
+            @PathVariable(value = "id", required = false) String pathId,
+            @RequestParam(value = "userId", required = false) String queryUserId
+    ) {
+        return processUpdateUser(formDTO, pathId, queryUserId);
+    }
+
+    private ResponseEntity<String> processUpdateUser(UserDTO dto, String pathId, String queryUserId) {
         try {
-            UserDTO targetDTO = (bodyDTO != null && bodyDTO.getUserId() != null) ? bodyDTO : formDTO;
-            String response = userService.updateUserProfile(targetDTO);
-            logger.info("Updated profile for user: {}", targetDTO.getUserId());
+            if (dto == null) {
+                dto = new UserDTO();
+            }
+
+            // 1. Resolve userId from DTO, path variable, query param, or SecurityContext
+            String resolvedUserId = dto.getUserId();
+            if (resolvedUserId == null || resolvedUserId.isBlank()) {
+                if (pathId != null && !pathId.isBlank()) {
+                    resolvedUserId = pathId;
+                } else if (queryUserId != null && !queryUserId.isBlank()) {
+                    resolvedUserId = queryUserId;
+                } else {
+                    resolvedUserId = com.video_streaming.project_video.Utils.SecurityUtils.getCurrentUserIdOptional().orElse(null);
+                }
+            }
+
+            if (resolvedUserId == null || resolvedUserId.isBlank()) {
+                logger.warn("User ID not found in payload, parameters, or SecurityContext");
+                return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST)
+                        .body("Validation error: User ID is required to update profile");
+            }
+            dto.setUserId(resolvedUserId);
+
+            // 2. Prevent updating another user's profile if authenticated
+            var currentUserIdOpt = com.video_streaming.project_video.Utils.SecurityUtils.getCurrentUserIdOptional();
+            if (currentUserIdOpt.isPresent()) {
+                String authenticatedUid = currentUserIdOpt.get();
+                if (!authenticatedUid.equalsIgnoreCase(resolvedUserId)) {
+                    try {
+                        UserDTO target = userService.getUserById(resolvedUserId);
+                        if (target != null && !authenticatedUid.equalsIgnoreCase(target.getUserId())) {
+                            logger.warn("Caller {} attempted to update profile of {}", authenticatedUid, resolvedUserId);
+                            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                                    .body("Forbidden: Cannot update another user's profile");
+                        }
+                    } catch (Exception ignored) {
+                        return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                                .body("Forbidden: Cannot update another user's profile");
+                    }
+                }
+            }
+
+            String response = userService.updateUserProfile(dto);
+            logger.info("Updated profile for user: {}", dto.getUserId());
             return ResponseEntity.ok(response);
+
         } catch (IllegalArgumentException e) {
             logger.warn("Validation error updating user: {}", e.getMessage());
-            return ResponseEntity.status(400).body("Validation error: " + e.getMessage());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST).body("Validation error: " + e.getMessage());
         } catch (Exception e) {
-            logger.error("Error updating user: {}", e.getMessage());
-            return ResponseEntity.status(500).body("Error updating user: " + e.getMessage());
+            logger.error("Error updating user: {}", e.getMessage(), e);
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating user: " + e.getMessage());
         }
     }
 

@@ -26,13 +26,14 @@ import static com.video_streaming.project_video.Enums.SupportVariables.WHITELIST
 public class SecurityConfig {
 
     private final FirebaseTokenFilter firebaseTokenFilter;
+    private final com.video_streaming.project_video.Filter.RateLimitingFilter rateLimitingFilter;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(ALLOWED_ORIGINS);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With", "Origin"));
         config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
 
@@ -53,7 +54,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(WHITELISTED_PATHS.toArray(new String[0])).permitAll()
                         .anyRequest().authenticated())
-                .addFilterBefore(firebaseTokenFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(firebaseTokenFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(rateLimitingFilter, FirebaseTokenFilter.class);
 
         return http.build();
     }
