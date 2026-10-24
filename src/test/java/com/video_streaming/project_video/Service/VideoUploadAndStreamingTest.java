@@ -181,4 +181,21 @@ public class VideoUploadAndStreamingTest {
         assertEquals("https://s3.amazonaws.com/test/storyboard.webp", entityAgain.getStoryboard_url());
         assertEquals("https://s3.amazonaws.com/test/thumbnails.vtt", entityAgain.getVtt_url());
     }
+
+    @Test
+    void testVideoStatusFallback() {
+        Video videoWithM3u8 = new Video();
+        videoWithM3u8.setM3u8Url("https://s3.amazonaws.com/bucket/hls/master.m3u8");
+        videoWithM3u8.setVideoStatus(null);
+        assertEquals(VideoStatus.COMPLETED, videoWithM3u8.getVideoStatus());
+
+        Video videoWithoutM3u8 = new Video();
+        videoWithoutM3u8.setM3u8Url(null);
+        videoWithoutM3u8.setVideoStatus(null);
+        assertEquals(VideoStatus.PENDING, videoWithoutM3u8.getVideoStatus());
+
+        Video videoProcessing = new Video();
+        videoProcessing.setVideoStatus(VideoStatus.PROCESSING);
+        assertEquals(VideoStatus.PROCESSING, videoProcessing.getVideoStatus());
+    }
 }

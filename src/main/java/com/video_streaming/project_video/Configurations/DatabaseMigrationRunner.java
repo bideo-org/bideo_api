@@ -37,6 +37,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         executeSafe("vid_metadata dislikes_count column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS dislikes_count BIGINT DEFAULT 0;");
         executeSafe("vid_metadata storyboard_url column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS storyboard_url VARCHAR(500);");
         executeSafe("vid_metadata vtt_url column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS vtt_url VARCHAR(500);");
+        executeSafe("vid_metadata video_status column", "ALTER TABLE vid_metadata ADD COLUMN IF NOT EXISTS video_status VARCHAR(50) DEFAULT 'PENDING';");
 
         // 3. Backfill video metadata defaults
         executeSafe("vid_metadata visibility backfill", "UPDATE vid_metadata SET visibility = 'PUBLIC' WHERE visibility IS NULL;");
@@ -44,6 +45,9 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         executeSafe("vid_metadata slug backfill", "UPDATE vid_metadata SET slug = CONCAT('video-', video_id) WHERE slug IS NULL;");
         executeSafe("vid_metadata likes_count backfill", "UPDATE vid_metadata SET likes_count = 0 WHERE likes_count IS NULL;");
         executeSafe("vid_metadata dislikes_count backfill", "UPDATE vid_metadata SET dislikes_count = 0 WHERE dislikes_count IS NULL;");
+        executeSafe("vid_metadata video_status backfill completed (snake_case)", "UPDATE vid_metadata SET video_status = 'COMPLETED' WHERE m3u8_url IS NOT NULL AND (video_status IS NULL OR video_status = 'PENDING');");
+        executeSafe("vid_metadata video_status backfill completed (lowercase)", "UPDATE vid_metadata SET video_status = 'COMPLETED' WHERE m3u8url IS NOT NULL AND (video_status IS NULL OR video_status = 'PENDING');");
+        executeSafe("vid_metadata video_status backfill pending", "UPDATE vid_metadata SET video_status = 'PENDING' WHERE video_status IS NULL;");
 
         // 4. Video tags table
         executeSafe("video_tags table", "CREATE TABLE IF NOT EXISTS video_tags (" +

@@ -93,6 +93,13 @@ public class Video {
         return tags != null ? tags : new ArrayList<>();
     }
 
+    public VideoStatus getVideoStatus() {
+        if (videoStatus != null) {
+            return videoStatus;
+        }
+        return (m3u8Url != null && !m3u8Url.isBlank()) ? VideoStatus.COMPLETED : VideoStatus.PENDING;
+    }
+
     public void updateMetadata(VideoMetadataUpdateRequest request) {
         if (request == null) return;
         if (request.getVideoTitle() != null && !request.getVideoTitle().isBlank()) {

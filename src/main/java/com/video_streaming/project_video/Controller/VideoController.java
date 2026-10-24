@@ -77,6 +77,19 @@ public class VideoController {
         return transcodeProgressManager.subscribe(videoId);
     }
 
+    @GetMapping("/{videoId}/status")
+    public ResponseEntity<Map<String, Object>> getVideoStatus(@PathVariable Long videoId) {
+        VideoDTO video = videoService.viewVideo(videoId);
+        TranscodeProgressManager.TranscodeProgress progress = transcodeProgressManager.getProgress(videoId);
+        return ResponseEntity.ok(Map.of(
+                "videoId", videoId,
+                "videoStatus", video.getVideoStatus() != null ? video.getVideoStatus().name() : "PENDING",
+                "stage", progress != null ? progress.stage() : "UNKNOWN",
+                "percent", progress != null ? progress.percent() : 0,
+                "m3u8Url", video.getM3u8Url() != null ? video.getM3u8Url() : ""
+        ));
+    }
+
     @PostMapping("/upload")
     public ResponseEntity<String> uploadVidResponseEntity(
             @RequestParam("file") MultipartFile videoFile, 
@@ -115,6 +128,7 @@ public class VideoController {
                     userId
             );
 
+            transcodeProgressManager.updateProgress(videoID, "QUEUED", 5, "PROCESSING");
             messageSender.sendVideoPath(result, videoID);
             return ResponseEntity.ok(result);
 
