@@ -105,7 +105,7 @@ Make sure you have the following installed:
 
 ```bash
 # Clone Backend repository
-git clone https://github.com/Mist-AA/bideo_api
+git clone https://github.com/buzzclips-org/buzzclips_api.git
 1. Uncomment line 16 in SupportVariables
 2. Uncomment line 30 in logback-spring.xml
 3 In edit configurations, Modify Options > Add vm options. Then within VM options field, add this   -Dspring.profiles.active=dev

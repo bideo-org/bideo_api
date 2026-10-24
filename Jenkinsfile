@@ -75,6 +75,8 @@ pipeline {
                     # 5. Configure Git safe directories for Jenkins user across deployment repos
                     git config --global --add safe.directory "${DEPLOY_ROOT}" || true
                     git config --global --add safe.directory "${BACKEND_DIR}" || true
+                    git config --global --add safe.directory "${DEPLOY_ROOT}/buzzclips_api" || true
+                    git config --global --add safe.directory "${DEPLOY_ROOT}/bideo_api" || true
                     git config --global --add safe.directory '*' || true
 
                     echo "✅ Pre-flight checks passed successfully!"
@@ -161,11 +163,21 @@ pipeline {
                     fi
 
                     # 3. Pull latest backend code into deployment directory
-                    echo "🔄 Updating code in ${BACKEND_DIR}..."
-                    cd "${BACKEND_DIR}"
+                    TARGET_BACKEND_DIR="${BACKEND_DIR}"
+                    if [ ! -d "${TARGET_BACKEND_DIR}" ]; then
+                        if [ -d "${DEPLOY_ROOT}/buzzclips_api" ]; then
+                            TARGET_BACKEND_DIR="${DEPLOY_ROOT}/buzzclips_api"
+                        elif [ -d "${DEPLOY_ROOT}/bideo_api" ]; then
+                            TARGET_BACKEND_DIR="${DEPLOY_ROOT}/bideo_api"
+                        fi
+                    fi
+
+                    echo "🔄 Updating code in ${TARGET_BACKEND_DIR}..."
+                    cd "${TARGET_BACKEND_DIR}"
+                    git remote set-url origin https://github.com/buzzclips-org/buzzclips_api.git 2>/dev/null || true
                     git pull --rebase
 
-                    echo "🔨 Building deployment jar inside ${BACKEND_DIR}..."
+                    echo "🔨 Building deployment jar inside ${TARGET_BACKEND_DIR}..."
                     mvn clean package -DskipTests
 
                     # 4. Identify backend service in docker-compose
@@ -178,6 +190,8 @@ pipeline {
                     SERVICE_NAME=""
                     if echo "$ALL_SERVICES" | grep -qw "project_video"; then
                         SERVICE_NAME="project_video"
+                    elif echo "$ALL_SERVICES" | grep -qw "buzzclips_api"; then
+                        SERVICE_NAME="buzzclips_api"
                     elif echo "$ALL_SERVICES" | grep -qw "bideo_api"; then
                         SERVICE_NAME="bideo_api"
                     elif echo "$ALL_SERVICES" | grep -qw "backend"; then
@@ -199,8 +213,8 @@ pipeline {
 
                     # Safely remove any stuck previous container to prevent 'removal in progress' daemon errors
                     echo "🧹 Ensuring clean container state..."
-                    docker stop "$SERVICE_NAME" 2>/dev/null || docker stop bideo_api 2>/dev/null || true
-                    docker rm -f "$SERVICE_NAME" 2>/dev/null || docker rm -f bideo_api 2>/dev/null || true
+                    docker stop "$SERVICE_NAME" 2>/dev/null || docker stop buzzclips_api 2>/dev/null || docker stop bideo_api 2>/dev/null || true
+                    docker rm -f "$SERVICE_NAME" 2>/dev/null || docker rm -f buzzclips_api 2>/dev/null || docker rm -f bideo_api 2>/dev/null || true
 
                     echo "🔄 Updating container with isolated zero-downtime recreation..."
                     $DOCKER_COMPOSE up -d --no-deps "$SERVICE_NAME"
@@ -229,6 +243,8 @@ pipeline {
                     SERVICE_NAME="project_video"
                     if echo "$ALL_SERVICES" | grep -qw "project_video"; then
                         SERVICE_NAME="project_video"
+                    elif echo "$ALL_SERVICES" | grep -qw "buzzclips_api"; then
+                        SERVICE_NAME="buzzclips_api"
                     elif echo "$ALL_SERVICES" | grep -qw "bideo_api"; then
                         SERVICE_NAME="bideo_api"
                     elif echo "$ALL_SERVICES" | grep -qw "backend"; then
@@ -247,6 +263,9 @@ pipeline {
                     TARGET_CONTAINER=$(docker ps -q -f "name=${SERVICE_NAME}" 2>/dev/null | head -n 1)
                     if [ -z "$TARGET_CONTAINER" ]; then
                         TARGET_CONTAINER=$($DOCKER_COMPOSE ps -q "$SERVICE_NAME" 2>/dev/null | head -n 1)
+                    fi
+                    if [ -z "$TARGET_CONTAINER" ]; then
+                        TARGET_CONTAINER=$(docker ps -q -f "name=buzzclips_api" 2>/dev/null | head -n 1)
                     fi
                     if [ -z "$TARGET_CONTAINER" ]; then
                         TARGET_CONTAINER=$(docker ps -q -f "name=bideo_api" 2>/dev/null | head -n 1)
