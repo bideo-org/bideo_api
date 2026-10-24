@@ -549,20 +549,25 @@ public class VideoServiceImpl implements VideoService {
         logger.info("Completed S3 directory deletion for prefix: {}", prefix);
     }
 
-    private double parseDurationInSeconds(String inputPath) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder(
-                "ffprobe",
-                "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                inputPath
-        );
+    private double parseDurationInSeconds(String inputPath) {
+        if (inputPath == null || inputPath.isBlank()) {
+            return 0.0;
+        }
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    "ffprobe",
+                    "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    inputPath
+            );
 
-        Process process = pb.start();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String durationStr = reader.readLine();
-            if (durationStr != null && !durationStr.isBlank()) {
-                return Double.parseDouble(durationStr.trim());
+            Process process = pb.start();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String durationStr = reader.readLine();
+                if (durationStr != null && !durationStr.isBlank()) {
+                    return Double.parseDouble(durationStr.trim());
+                }
             }
         } catch (Exception e) {
             logger.warn("Could not parse ffprobe duration for {}: {}", inputPath, e.getMessage());
